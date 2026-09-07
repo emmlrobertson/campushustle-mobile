@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "CampusHustle KNUST",
+    "slug": "campushustle-knust",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#059669"
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
