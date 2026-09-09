@@ -93,19 +93,35 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         }
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>🔍</Text>
-            <Text style={styles.emptyTitle}>No hustles match your search</Text>
-            <Text style={styles.emptySubtitle}>
-              Try clearing filters or searching for different keywords like "tutoring", "phone", or "Ayeduase".
-            </Text>
-            <TouchableOpacity
-              style={styles.resetButton}
-              onPress={() => {
-                setSearchQuery('');
-              }}
-            >
-              <Text style={styles.resetButtonText}>Clear Search</Text>
-            </TouchableOpacity>
+            {searchQuery !== '' || selectedCategory !== 'all' || selectedLocation !== 'All Locations' ? (
+              <>
+                <Text style={styles.emptyIcon}>🔍</Text>
+                <Text style={styles.emptyTitle}>No hustles match your search</Text>
+                <Text style={styles.emptySubtitle}>
+                  Try clearing filters or searching for different keywords.
+                </Text>
+                <TouchableOpacity
+                  style={styles.resetButton}
+                  onPress={() => setSearchQuery('')}
+                >
+                  <Text style={styles.resetButtonText}>Clear Search</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <Text style={styles.emptyIcon}>🎓🔥</Text>
+                <Text style={styles.emptyTitle}>Welcome to CampusHustle KNUST!</Text>
+                <Text style={styles.emptySubtitle}>
+                  Be the pioneer student to publish a side-hustle & earn from your classmates today!
+                </Text>
+                <TouchableOpacity
+                  style={styles.resetButton}
+                  onPress={() => navigation.navigate('Post')}
+                >
+                  <Text style={styles.resetButtonText}>🚀 Post the First Hustle</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         }
       />

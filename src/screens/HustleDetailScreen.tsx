@@ -46,7 +46,7 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
 
   const handleWhatsAppChat = () => {
     const message = encodeURIComponent(
-      `Hi ${hustle.sellerName}, I saw your side-hustle listing "${hustle.title}" on CampusHustle KNUST! Is it still available?`
+      `Hi ${hustle.sellerName}! I saw your side-hustle "${hustle.title}" on CampusHustle KNUST. I'd like to request this service at ${hustle.hostelLocation} for GH₵ ${hustle.price}. Are you available?`
     );
     const url = `whatsapp://send?phone=${hustle.whatsAppNumber}&text=${message}`;
 
