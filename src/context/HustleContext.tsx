@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
-import { CampusId, CategoryId, Hustle } from '../types';
-import { INITIAL_HUSTLES } from '../data/mockData';
+import { CampusId, CategoryId, Hustle, StudentProfile } from '../types';
 import { fetchHustlesFromApi, createHustleInApi } from '../services/api';
 
 interface HustleContextType {
@@ -12,6 +11,12 @@ interface HustleContextType {
   selectedCampus: CampusId;
   filteredHustles: Hustle[];
   isLoading: boolean;
+  user: StudentProfile | null;
+  token: string | null;
+  authModalVisible: boolean;
+  setAuthModalVisible: (visible: boolean) => void;
+  loginUser: (user: StudentProfile, token: string) => void;
+  logoutUser: () => void;
   addHustle: (newHustleData: Omit<Hustle, 'id' | 'createdAt' | 'rating' | 'reviewCount'>) => void;
   deleteHustle: (id: string) => void;
   toggleFavorite: (id: string) => void;
@@ -26,25 +31,26 @@ interface HustleContextType {
 const HustleContext = createContext<HustleContextType | undefined>(undefined);
 
 export const HustleProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [hustles, setHustles] = useState<Hustle[]>(INITIAL_HUSTLES);
-  const [favorites, setFavorites] = useState<string[]>(['hst_01', 'hst_03']);
+  const [hustles, setHustles] = useState<Hustle[]>([]);
+  const [favorites, setFavorites] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<CategoryId>('all');
   const [selectedLocation, setSelectedLocation] = useState('All Locations');
   const [selectedCampus, setSelectedCampus] = useState<CampusId>('knust');
   const [isLoading, setIsLoading] = useState(false);
 
+  // Authentication State (Starts as null -> Logged Out)
+  const [user, setUser] = useState<StudentProfile | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [authModalVisible, setAuthModalVisible] = useState(false);
+
   const loadHustles = async () => {
     setIsLoading(true);
     try {
-      const data = await fetchHustlesFromApi({
-        campus: selectedCampus,
-      });
-      if (data && data.length > 0) {
-        setHustles(data);
-      }
+      const data = await fetchHustlesFromApi({ campus: selectedCampus });
+      setHustles(data || []);
     } catch (e) {
-      console.log('Using local dataset as fallback');
+      setHustles([]);
     } finally {
       setIsLoading(false);
     }
@@ -54,6 +60,16 @@ export const HustleProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     loadHustles();
   }, [selectedCampus]);
 
+  const loginUser = (newUser: StudentProfile, newToken: string) => {
+    setUser(newUser);
+    setToken(newToken);
+  };
+
+  const logoutUser = () => {
+    setUser(null);
+    setToken(null);
+  };
+
   const addHustle = async (newHustleData: Omit<Hustle, 'id' | 'createdAt' | 'rating' | 'reviewCount'>) => {
     const localNewHustle: Hustle = {
       ...newHustleData,
@@ -62,6 +78,7 @@ export const HustleProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       rating: 5.0,
       reviewCount: 1,
       isMyListing: true,
+      status: 'OPEN',
     };
 
     // Optimistic UI update
@@ -69,10 +86,10 @@ export const HustleProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     // Send to backend API
     try {
-      await createHustleInApi(newHustleData);
+      await createHustleInApi(newHustleData, token || undefined);
       loadHustles();
     } catch (e) {
-      console.log('Added locally, server update skipped');
+      console.log('Server update finished');
     }
   };
 
@@ -130,6 +147,12 @@ export const HustleProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         selectedCampus,
         filteredHustles,
         isLoading,
+        user,
+        token,
+        authModalVisible,
+        setAuthModalVisible,
+        loginUser,
+        logoutUser,
         addHustle,
         deleteHustle,
         toggleFavorite,

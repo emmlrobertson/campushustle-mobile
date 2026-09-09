@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { useHustleContext } from '../context/HustleContext';
-import { CATEGORIES, KNUST_LOCATIONS, CURRENT_USER } from '../data/mockData';
+import { CATEGORIES, KNUST_LOCATIONS } from '../data/mockData';
 import { CategoryId, PriceType } from '../types';
 
 interface PostHustleScreenProps {
@@ -19,21 +19,30 @@ interface PostHustleScreenProps {
 }
 
 export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }) => {
-  const { addHustle } = useHustleContext();
+  const { addHustle, user, setAuthModalVisible } = useHustleContext();
 
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<CategoryId>('tutoring');
   const [price, setPrice] = useState('');
   const [priceType, setPriceType] = useState<PriceType>('flat');
   const [hostelLocation, setHostelLocation] = useState('Ayeduase');
-  const [sellerName, setSellerName] = useState(CURRENT_USER.name);
-  const [sellerProgram, setSellerProgram] = useState(CURRENT_USER.program);
-  const [whatsAppNumber, setWhatsAppNumber] = useState(CURRENT_USER.whatsAppNumber);
+  const [sellerName, setSellerName] = useState('');
+  const [sellerProgram, setSellerProgram] = useState('');
+  const [whatsAppNumber, setWhatsAppNumber] = useState('');
   const [description, setDescription] = useState('');
   const [tagsInput, setTagsInput] = useState('');
   const [imageUrl, setImageUrl] = useState(
     'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=600&q=80'
   );
+
+  useEffect(() => {
+    if (user) {
+      setSellerName(user.name);
+      setSellerProgram(user.program);
+      setWhatsAppNumber(user.whatsAppNumber);
+      setHostelLocation(user.hostelLocation || 'Ayeduase');
+    }
+  }, [user]);
 
   const presetImages = [
     { label: '📚 Study', url: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=600&q=80' },
@@ -42,6 +51,29 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
     { label: '🍕 Food', url: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=600&q=80' },
     { label: '💅 Beauty', url: 'https://images.unsplash.com/photo-1560869713-7d0a29430803?auto=format&fit=crop&w=600&q=80' },
   ];
+
+  if (!user) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+        <View style={styles.loggedOutContainer}>
+          <Text style={styles.loggedOutIcon}>🎓</Text>
+          <Text style={styles.loggedOutTitle}>KNUST Student Login Required</Text>
+          <Text style={styles.loggedOutSub}>
+            Please log in or register with your valid @st.knust.edu.gh student email to publish side-hustles on campus.
+          </Text>
+
+          <TouchableOpacity
+            style={styles.loginNowBtn}
+            onPress={() => setAuthModalVisible(true)}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.loginNowText}>🔑 Student Log In / Sign Up</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const handleSubmit = () => {
     if (!title.trim()) {
@@ -83,6 +115,7 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
       description,
       tags,
       imageUrl,
+      status: 'OPEN',
     });
 
     Alert.alert('🎉 Success!', 'Your side-hustle is now live on CampusHustle KNUST!', [
@@ -95,10 +128,10 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#1E3A8A" />
+      <StatusBar barStyle="light-content" backgroundColor="#059669" />
       <View style={styles.topHeader}>
         <Text style={styles.headerTitle}>Post a Side-Hustle</Text>
-        <Text style={styles.headerSubtitle}>Publish your service to KNUST students</Text>
+        <Text style={styles.headerSubtitle}>Publishing as {user.name} ({user.email})</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.formContent}>
@@ -195,7 +228,7 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
         {/* Seller Info */}
         <View style={styles.rowInputs}>
           <View style={[styles.inputGroup, { flex: 1 }]}>
-            <Text style={styles.label}>Your Name</Text>
+            <Text style={styles.label}>Seller Name</Text>
             <TextInput
               style={styles.textInput}
               value={sellerName}
@@ -281,7 +314,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   topHeader: {
-    backgroundColor: '#1E3A8A',
+    backgroundColor: '#059669',
     padding: 16,
   },
   headerTitle: {
@@ -291,7 +324,7 @@ const styles = StyleSheet.create({
   },
   headerSubtitle: {
     fontSize: 12,
-    color: '#93C5FD',
+    color: '#D1FAE5',
     marginTop: 2,
   },
   formContent: {
@@ -337,7 +370,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   selectedPill: {
-    backgroundColor: '#1E3A8A',
+    backgroundColor: '#059669',
   },
   pillIcon: {
     fontSize: 13,
@@ -364,7 +397,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   selectedTypeBtn: {
-    backgroundColor: '#1E3A8A',
+    backgroundColor: '#059669',
   },
   typeText: {
     fontSize: 11,
@@ -395,20 +428,50 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   submitBtn: {
-    backgroundColor: '#1E3A8A',
+    backgroundColor: '#059669',
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 10,
-    shadowColor: '#1E3A8A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 3,
   },
   submitBtnText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '800',
+  },
+  loggedOutContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  loggedOutIcon: {
+    fontSize: 56,
+    marginBottom: 12,
+  },
+  loggedOutTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  loggedOutSub: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 19,
+    marginBottom: 20,
+  },
+  loginNowBtn: {
+    backgroundColor: '#059669',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  loginNowText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 14,
   },
 });

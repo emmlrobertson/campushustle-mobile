@@ -26,8 +26,8 @@ export async function fetchHustlesFromApi(params?: {
     const result = await response.json();
     return result.data || [];
   } catch (error) {
-    console.warn(`Cloud API connection failed (${API_BASE_URL}), falling back to local state:`, error);
-    throw error;
+    console.warn(`Cloud API connection error:`, error);
+    return [];
   }
 }
 
@@ -50,10 +50,52 @@ export async function createHustleInApi(
   });
 
   if (!response.ok) {
-    throw new Error('Failed to create hustle in backend API');
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to create hustle in backend API');
   }
 
   return response.json();
+}
+
+export async function registerStudentApi(userData: {
+  name: string;
+  email: string;
+  password: string;
+  program: string;
+  hostelLocation: string;
+  whatsAppNumber: string;
+  campus?: string;
+}): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(userData),
+  });
+
+  const data = await response.json();
+  if (!response.ok || !data.success) {
+    throw new Error(data.error || 'Registration failed.');
+  }
+
+  return data;
+}
+
+export async function loginStudentApi(credentials: {
+  email: string;
+  password: string;
+}): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(credentials),
+  });
+
+  const data = await response.json();
+  if (!response.ok || !data.success) {
+    throw new Error(data.error || 'Login failed.');
+  }
+
+  return data;
 }
 
 export async function initializeMoMoPayment(paymentData: {
@@ -64,9 +106,7 @@ export async function initializeMoMoPayment(paymentData: {
 }): Promise<any> {
   const response = await fetch(`${API_BASE_URL}/payments/initialize`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(paymentData),
   });
 
@@ -74,13 +114,5 @@ export async function initializeMoMoPayment(paymentData: {
     throw new Error('Failed to initialize Mobile Money payment.');
   }
 
-  return response.json();
-}
-
-export async function verifyMoMoPayment(reference: string): Promise<any> {
-  const response = await fetch(`${API_BASE_URL}/payments/verify/${reference}`);
-  if (!response.ok) {
-    throw new Error('Failed to verify payment reference.');
-  }
   return response.json();
 }

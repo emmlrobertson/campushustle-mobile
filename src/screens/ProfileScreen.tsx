@@ -11,14 +11,14 @@ import {
   StatusBar,
 } from 'react-native';
 import { useHustleContext } from '../context/HustleContext';
-import { CURRENT_USER } from '../data/mockData';
 
 interface ProfileScreenProps {
   navigation: any;
 }
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
-  const { hustles, favorites, deleteHustle } = useHustleContext();
+  const { hustles, favorites, deleteHustle, user, logoutUser, setAuthModalVisible } =
+    useHustleContext();
 
   const myHustles = hustles.filter((h) => h.isMyListing);
 
@@ -33,11 +33,37 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
     ]);
   };
 
+  if (!user) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+        <View style={styles.loggedOutContainer}>
+          <Text style={styles.loggedOutIcon}>👤</Text>
+          <Text style={styles.loggedOutTitle}>KNUST Student Profile</Text>
+          <Text style={styles.loggedOutSub}>
+            Sign in with your @st.knust.edu.gh email to view your profile, manage active listings, and track saved hustles.
+          </Text>
+
+          <TouchableOpacity
+            style={styles.loginNowBtn}
+            onPress={() => setAuthModalVisible(true)}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.loginNowText}>🔑 Log In / Register Account</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#1E3A8A" />
+      <StatusBar barStyle="light-content" backgroundColor="#059669" />
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Student Profile</Text>
+        <TouchableOpacity style={styles.logoutBtn} onPress={logoutUser}>
+          <Text style={styles.logoutText}>Log Out</Text>
+        </TouchableOpacity>
       </View>
 
       <FlatList
@@ -48,13 +74,15 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
           <View>
             {/* User Profile Card */}
             <View style={styles.profileCard}>
-              <Image source={{ uri: CURRENT_USER.avatarUrl }} style={styles.avatar} />
-              <Text style={styles.userName}>{CURRENT_USER.name}</Text>
-              <Text style={styles.userProgram}>{CURRENT_USER.program}</Text>
-              <View style={styles.locationBadge}>
-                <Text style={styles.locationText}>📍 KNUST • {CURRENT_USER.hostelLocation}</Text>
+              <View style={styles.avatarBig}>
+                <Text style={styles.avatarLetter}>{user.name.charAt(0)}</Text>
               </View>
-              <Text style={styles.bioText}>{CURRENT_USER.bio}</Text>
+              <Text style={styles.userName}>{user.name}</Text>
+              <Text style={styles.userEmail}>{user.email}</Text>
+              <Text style={styles.userProgram}>{user.program}</Text>
+              <View style={styles.locationBadge}>
+                <Text style={styles.locationText}>📍 KNUST • {user.hostelLocation}</Text>
+              </View>
             </View>
 
             {/* Quick Stats */}
@@ -71,13 +99,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 
             {/* Expansion Roadmap Callout */}
             <View style={styles.roadmapCard}>
-              <Text style={styles.roadmapTitle}>🚀 Expansion Roadmap</Text>
+              <Text style={styles.roadmapTitle}>🚀 Campus Expansion</Text>
               <Text style={styles.roadmapText}>
                 Currently live at <Text style={{ fontWeight: '800' }}>KNUST</Text>! Next campuses scaling up: University of Ghana (UG Legon) & UCC.
               </Text>
             </View>
 
-            <Text style={styles.sectionTitle}>My Published Side-Hustles</Text>
+            <Text style={styles.sectionTitle}>My Active Side-Hustles</Text>
           </View>
         }
         renderItem={({ item }) => (
@@ -120,13 +148,27 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   header: {
-    backgroundColor: '#1E3A8A',
+    backgroundColor: '#059669',
     padding: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 22,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+  logoutBtn: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  logoutText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   content: {
     padding: 16,
@@ -141,16 +183,30 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  avatarBig: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#059669',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 10,
+  },
+  avatarLetter: {
+    color: '#FFFFFF',
+    fontSize: 32,
+    fontWeight: '800',
   },
   userName: {
     fontSize: 18,
     fontWeight: '800',
     color: '#0F172A',
+  },
+  userEmail: {
+    fontSize: 12,
+    color: '#059669',
+    fontWeight: '700',
+    marginTop: 1,
   },
   userProgram: {
     fontSize: 13,
@@ -169,13 +225,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  bioText: {
-    fontSize: 13,
-    color: '#334155',
-    textAlign: 'center',
-    marginTop: 10,
-    lineHeight: 18,
-  },
   statsRow: {
     flexDirection: 'row',
     gap: 12,
@@ -193,7 +242,7 @@ const styles = StyleSheet.create({
   statNumber: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#1E3A8A',
+    color: '#059669',
   },
   statLabel: {
     fontSize: 12,
@@ -202,22 +251,22 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   roadmapCard: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#ECFDF5',
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: '#A7F3D0',
     marginBottom: 20,
   },
   roadmapTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#1D4ED8',
+    color: '#047857',
     marginBottom: 4,
   },
   roadmapText: {
     fontSize: 12,
-    color: '#1E40AF',
+    color: '#065F46',
     lineHeight: 17,
   },
   sectionTitle: {
@@ -253,7 +302,7 @@ const styles = StyleSheet.create({
   myHustlePrice: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#1E3A8A',
+    color: '#059669',
     marginTop: 2,
   },
   myHustleHostel: {
@@ -276,7 +325,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   postNowBtn: {
-    backgroundColor: '#1E3A8A',
+    backgroundColor: '#059669',
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 10,
@@ -285,5 +334,40 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 13,
+  },
+  loggedOutContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  loggedOutIcon: {
+    fontSize: 56,
+    marginBottom: 12,
+  },
+  loggedOutTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  loggedOutSub: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 19,
+    marginBottom: 20,
+  },
+  loginNowBtn: {
+    backgroundColor: '#059669',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  loginNowText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 14,
   },
 });
