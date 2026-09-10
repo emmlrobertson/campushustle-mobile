@@ -25,6 +25,15 @@ export const HustleCard: React.FC<HustleCardProps> = ({ hustle, onPress }) => {
 
   const catMeta = categoryLabels[hustle.category] || { label: hustle.category, bg: '#F1F5F9', text: '#475569' };
 
+  const deliveryLabels: Record<string, { label: string; icon: string }> = {
+    to_client: { label: 'At Your Hostel', icon: '🏠' },
+    at_seller: { label: 'At My Hostel', icon: '📍' },
+    campus_spot: { label: 'Campus Spot', icon: '🎓' },
+    remote: { label: 'Remote', icon: '💻' },
+  };
+
+  const delivery = deliveryLabels[hustle.deliveryMode || 'to_client'] || deliveryLabels.to_client;
+
   return (
     <TouchableOpacity
       style={styles.card}
@@ -38,7 +47,7 @@ export const HustleCard: React.FC<HustleCardProps> = ({ hustle, onPress }) => {
         {/* Status Badge Overlaid Top Left */}
         <View style={styles.statusBadge}>
           <Text style={[styles.statusDot, status === 'OPEN' ? styles.openDot : styles.busyDot]}>●</Text>
-          <Text style={styles.statusText}>{status}</Text>
+          <Text style={styles.statusText}>{status === 'OPEN' ? 'AVAILABLE' : 'BUSY'}</Text>
         </View>
 
         {/* Top Rated / Featured Pill */}
@@ -82,10 +91,15 @@ export const HustleCard: React.FC<HustleCardProps> = ({ hustle, onPress }) => {
           </View>
         </View>
 
-        {/* Category Pill */}
+        {/* Category & Delivery Mode Pills */}
         <View style={styles.footerRow}>
-          <View style={[styles.categoryBadge, { backgroundColor: catMeta.bg }]}>
-            <Text style={[styles.categoryText, { color: catMeta.text }]}>{catMeta.label}</Text>
+          <View style={styles.badgesCluster}>
+            <View style={[styles.categoryBadge, { backgroundColor: catMeta.bg }]}>
+              <Text style={[styles.categoryText, { color: catMeta.text }]}>{catMeta.label}</Text>
+            </View>
+            <View style={styles.deliveryBadge}>
+              <Text style={styles.deliveryBadgeText}>{delivery.icon} {delivery.label}</Text>
+            </View>
           </View>
 
           {/* Seller Avatar Pill */}
@@ -248,6 +262,14 @@ const styles = StyleSheet.create({
     borderTopColor: '#F8FAFC',
     paddingTop: 10,
   },
+  badgesCluster: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+    flex: 1,
+    marginRight: 6,
+  },
   categoryBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -256,6 +278,19 @@ const styles = StyleSheet.create({
   categoryText: {
     fontSize: 11,
     fontWeight: '700',
+  },
+  deliveryBadge: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  deliveryBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#475569',
   },
   sellerPill: {
     flexDirection: 'row',

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,9 +12,18 @@ import {
   Share,
   Modal,
   TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { useHustleContext } from '../context/HustleContext';
-import { initializeMoMoPayment } from '../services/api';
+import {
+  initializeMoMoPayment,
+  formatGhanaPhoneNumber,
+  fetchHustleReviewsApi,
+  submitHustleReviewApi,
+  toggleHustleStatusApi,
+} from '../services/api';
+import { SAMPLE_REVIEWS } from '../data/mockData';
+import { Review } from '../types';
 
 interface HustleDetailScreenProps {
   route: any;
@@ -23,7 +32,16 @@ interface HustleDetailScreenProps {
 
 export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, navigation }) => {
   const { hustleId } = route.params;
-  const { hustles, isFavorite, toggleFavorite } = useHustleContext();
+  const {
+    hustles,
+    isFavorite,
+    toggleFavorite,
+    user,
+    token,
+    setAuthModalVisible,
+    updateHustleStatus,
+    updateHustleRating,
+  } = useHustleContext();
 
   const hustle = hustles.find((h) => h.id === hustleId);
   const favorite = isFavorite(hustleId);
@@ -32,6 +50,32 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
   const [buyerEmail, setBuyerEmail] = useState('student@st.knust.edu.gh');
   const [momoNumber, setMomoNumber] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedMeetupSpot, setSelectedMeetupSpot] = useState('🏛️ CCB Ground Floor (Near Commercial Bank)');
+
+  // Reviews State
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviewModalVisible, setReviewModalVisible] = useState(false);
+  const [newRating, setNewRating] = useState(5);
+  const [newComment, setNewComment] = useState('');
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+
+  // Status Toggle State
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+
+  useEffect(() => {
+    if (!hustle) return;
+    const initialReviews = SAMPLE_REVIEWS[hustle.id] || [];
+    setReviews(initialReviews);
+
+    // Fetch live reviews from backend API
+    fetchHustleReviewsApi(hustle.id)
+      .then((liveReviews) => {
+        if (liveReviews && liveReviews.length > 0) {
+          setReviews(liveReviews);
+        }
+      })
+      .catch(() => {});
+  }, [hustleId]);
 
   if (!hustle) {
     return (
@@ -44,24 +88,130 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
     );
   }
 
+  const isOwner = Boolean(user && hustle.sellerId && hustle.sellerId === user.id);
+  const status = hustle.status || 'OPEN';
+
+  const deliveryDescriptions: Record<string, { label: string; icon: string; detail: string; tag: string }> = {
+    to_client: {
+      label: 'Hostel Room Service (I come to you)',
+      icon: '🏠',
+      detail: 'Seller will travel to your room/hostel anywhere on campus or Ayeduase/Kotei/Brunei.',
+      tag: 'Hostel Delivery',
+    },
+    at_seller: {
+      label: `Client Visits Seller's Room (${hustle.hostelLocation})`,
+      icon: '📍',
+      detail: `You will visit the seller at their room/hostel in ${hustle.hostelLocation}.`,
+      tag: 'At Seller Room',
+    },
+    campus_spot: {
+      label: 'Campus Public Spot Meeting',
+      icon: '🎓',
+      detail: 'Meet at verified safe campus hubs like CCB, Main Library, or Brunei Market.',
+      tag: 'Campus Spot',
+    },
+    remote: {
+      label: 'Remote / Online Delivery',
+      icon: '💻',
+      detail: 'Completed digitally via WhatsApp, Zoom, Google Drive, or email.',
+      tag: 'Online/Remote',
+    },
+  };
+
+  const delivery = deliveryDescriptions[hustle.deliveryMode || 'to_client'] || deliveryDescriptions.to_client;
+
+  const handleToggleStatus = async () => {
+    const nextStatus = status === 'OPEN' ? 'BUSY' : 'OPEN';
+    setIsUpdatingStatus(true);
+    updateHustleStatus(hustle.id, nextStatus);
+
+    if (token) {
+      try {
+        await toggleHustleStatusApi(hustle.id, nextStatus, token);
+      } catch (err) {
+        console.warn('Status toggle error:', err);
+      }
+    }
+    setIsUpdatingStatus(false);
+  };
+
+  const handleOpenReviewModal = () => {
+    if (!user) {
+      Alert.alert(
+        'Student Login Required',
+        'Please sign in with your student account to rate and review classmates.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Log In Now', onPress: () => setAuthModalVisible(true) },
+        ]
+      );
+      return;
+    }
+    setReviewModalVisible(true);
+  };
+
+  const handleSubmitReview = async () => {
+    if (!newComment.trim()) {
+      Alert.alert('Missing Comment', 'Please share a few words about your experience with this side-hustler.');
+      return;
+    }
+
+    setIsSubmittingReview(true);
+    const localReview: Review = {
+      id: `rev_${Date.now()}`,
+      hustleId: hustle.id,
+      reviewerId: user?.id,
+      reviewerName: user?.name || 'KNUST Student',
+      reviewerProgram: user?.program || 'Level 200',
+      rating: newRating,
+      comment: newComment.trim(),
+      createdAt: new Date().toISOString(),
+    };
+
+    const updatedReviews = [localReview, ...reviews];
+    setReviews(updatedReviews);
+
+    // Recalculate average rating & count
+    const avg = updatedReviews.reduce((sum, r) => sum + r.rating, 0) / updatedReviews.length;
+    const roundedRating = Math.round(avg * 10) / 10;
+    const newCount = updatedReviews.length;
+    updateHustleRating(hustle.id, roundedRating, newCount);
+
+    if (token) {
+      try {
+        await submitHustleReviewApi(hustle.id, newRating, newComment.trim(), token);
+      } catch (err) {
+        console.warn('Review API error:', err);
+      }
+    }
+
+    setIsSubmittingReview(false);
+    setReviewModalVisible(false);
+    setNewComment('');
+    setNewRating(5);
+
+    Alert.alert('⭐ Thank You!', 'Your review has been published for your fellow KNUST classmates.');
+  };
+
   const handleWhatsAppChat = () => {
+    const cleanPhone = formatGhanaPhoneNumber(hustle.whatsAppNumber);
     const message = encodeURIComponent(
       `Hi ${hustle.sellerName}! I saw your side-hustle "${hustle.title}" on CampusHustle KNUST. I'd like to request this service at ${hustle.hostelLocation} for GH₵ ${hustle.price}. Are you available?`
     );
-    const url = `whatsapp://send?phone=${hustle.whatsAppNumber}&text=${message}`;
+    const url = `whatsapp://send?phone=${cleanPhone}&text=${message}`;
 
     Linking.canOpenURL(url)
       .then((supported) => {
         if (supported) {
           return Linking.openURL(url);
         } else {
-          return Linking.openURL(`https://wa.me/${hustle.whatsAppNumber}?text=${message}`);
+          return Linking.openURL(`https://wa.me/${cleanPhone}?text=${message}`);
         }
       })
       .catch(() => {
         Alert.alert(
           'Contact Info',
-          `WhatsApp Number: +${hustle.whatsAppNumber}\n\nPlease save this number to chat directly.`
+          `WhatsApp Number: +${cleanPhone}\n\nPlease save this number to chat directly.`
         );
       });
   };
@@ -79,15 +229,16 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
         buyerEmail,
         momoNumber,
         paymentMethod: 'mtn_momo',
+        meetupSpot: selectedMeetupSpot,
       });
 
       setPaymentModalVisible(false);
       setIsProcessing(false);
 
       Alert.alert(
-        '💳 MoMo Payment Prompt Sent!',
-        `A payment prompt of GH₵ ${hustle.price} was sent to ${momoNumber}.\n\nReference: ${response.data.reference}\n\nSeller ${hustle.sellerName} will receive payment notification upon authorization!`,
-        [{ text: 'Great!' }]
+        '🛡️ Campus Escrow Protected!',
+        `A payment prompt of GH₵ ${hustle.price} was sent to ${momoNumber}.\n\n📍 Meetup Location: ${selectedMeetupSpot}\nReference: ${response.data.reference}\n\nFunds remain safely held in Campus Escrow until you confirm service delivery in your Profile screen!`,
+        [{ text: 'Great, Understood!' }]
       );
     } catch (error: any) {
       setIsProcessing(false);
@@ -111,7 +262,7 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
         {/* Banner Image */}
         <View style={styles.bannerContainer}>
           <Image source={{ uri: hustle.imageUrl }} style={styles.bannerImage} />
-          
+
           <TouchableOpacity
             style={styles.topBackNav}
             onPress={() => navigation.goBack()}
@@ -141,6 +292,36 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
 
         {/* Content Body */}
         <View style={styles.body}>
+          {/* Status & Availability Banner */}
+          <View style={[styles.statusBanner, status === 'OPEN' ? styles.statusBannerOpen : styles.statusBannerBusy]}>
+            <View style={styles.statusBannerLeft}>
+              <Text style={[styles.statusDot, status === 'OPEN' ? styles.statusDotOpen : styles.statusDotBusy]}>●</Text>
+              <View>
+                <Text style={styles.statusBannerTitle}>
+                  {status === 'OPEN' ? 'Available for Bookings' : 'Currently Busy with Lectures/Exams'}
+                </Text>
+                <Text style={styles.statusBannerSub}>
+                  {status === 'OPEN'
+                    ? 'Seller is accepting requests right now.'
+                    : 'Response may be delayed due to class or study schedule.'}
+                </Text>
+              </View>
+            </View>
+
+            {isOwner && (
+              <TouchableOpacity
+                style={styles.statusToggleBtn}
+                onPress={handleToggleStatus}
+                disabled={isUpdatingStatus}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.statusToggleBtnText}>
+                  {status === 'OPEN' ? 'Set Busy' : 'Set Available'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
           {/* Location & Category Badges */}
           <View style={styles.badgeRow}>
             <View style={styles.hostelBadge}>
@@ -174,6 +355,17 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
             <View style={styles.ratingBox}>
               <Text style={styles.starBig}>⭐ {hustle.rating.toFixed(1)}</Text>
               <Text style={styles.reviewSubText}>{hustle.reviewCount} student reviews</Text>
+            </View>
+          </View>
+
+          {/* Delivery & Meeting Mode Card */}
+          <View style={styles.deliveryCard}>
+            <View style={styles.deliveryCardHeader}>
+              <Text style={styles.deliveryCardIcon}>{delivery.icon}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.deliveryCardTitle}>{delivery.label}</Text>
+                <Text style={styles.deliveryCardDetail}>{delivery.detail}</Text>
+              </View>
             </View>
           </View>
 
@@ -212,6 +404,56 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
               Meet in public campus spots (CCB, Library, Hostel Lounge) when ordering or receiving services. Pay via MoMo or Cash upon satisfaction!
             </Text>
           </View>
+
+          {/* Classmate Reviews Section */}
+          <View style={styles.reviewsSection}>
+            <View style={styles.reviewsHeaderRow}>
+              <View>
+                <Text style={styles.sectionHeader}>Classmate Reviews</Text>
+                <Text style={styles.reviewsSub}>
+                  ⭐ {hustle.rating.toFixed(1)} avg from {reviews.length} {reviews.length === 1 ? 'review' : 'reviews'}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.leaveReviewBtn}
+                onPress={handleOpenReviewModal}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.leaveReviewBtnText}>⭐ Write Review</Text>
+              </TouchableOpacity>
+            </View>
+
+            {reviews.length === 0 ? (
+              <View style={styles.emptyReviews}>
+                <Text style={styles.emptyReviewsText}>
+                  No reviews yet. Be the first classmate to review {hustle.sellerName}'s work!
+                </Text>
+              </View>
+            ) : (
+              reviews.map((rev) => (
+                <View key={rev.id} style={styles.reviewItem}>
+                  <View style={styles.reviewItemHeader}>
+                    <View style={styles.reviewAvatar}>
+                      <Text style={styles.reviewAvatarText}>{rev.reviewerName.charAt(0)}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.reviewerName}>{rev.reviewerName}</Text>
+                      <Text style={styles.reviewerProgram}>{rev.reviewerProgram}</Text>
+                    </View>
+                    <View style={styles.starsRow}>
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <Text key={s} style={{ fontSize: 13, color: s <= rev.rating ? '#F59E0B' : '#CBD5E1' }}>
+                          ★
+                        </Text>
+                      ))}
+                    </View>
+                  </View>
+                  <Text style={styles.reviewComment}>{rev.comment}</Text>
+                </View>
+              ))
+            )}
+          </View>
         </View>
       </ScrollView>
 
@@ -236,51 +478,174 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
         </TouchableOpacity>
       </View>
 
-      {/* MoMo Payment Modal */}
+      {/* MoMo Payment & Campus Escrow Modal */}
       <Modal visible={paymentModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.escrowHeaderBadge}>
+                <Text style={styles.escrowBadgeIcon}>🛡️</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.escrowBadgeTitle}>Campus Escrow Protection</Text>
+                  <Text style={styles.escrowBadgeSub}>
+                    Funds are held safely until service is delivered & verified.
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={styles.modalTitle}>📱 Secure MoMo Checkout</Text>
+              <Text style={styles.modalSubtitle}>
+                Holding <Text style={{ fontWeight: '800', color: '#059669' }}>GH₵ {hustle.price}</Text> for {hustle.sellerName}
+              </Text>
+
+              {/* Safe Meetup Spot Selection */}
+              <View style={styles.modalInputGroup}>
+                <Text style={styles.modalLabel}>📍 Safe Campus Meetup Spot *</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.meetupScroll}>
+                  {[
+                    '🏛️ CCB Ground Floor',
+                    '📚 Main Library Forecourt',
+                    '🏪 Brunei Complex Market',
+                    '🏢 Hall Porter’s Lodge',
+                    '🍽️ Royal Parade Grounds',
+                    '🏠 Private Hostel Room',
+                  ].map((spot) => {
+                    const isSelected = selectedMeetupSpot.includes(spot.substring(3));
+                    return (
+                      <TouchableOpacity
+                        key={spot}
+                        style={[styles.meetupChip, isSelected && styles.meetupChipActive]}
+                        onPress={() => setSelectedMeetupSpot(spot)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={[styles.meetupChipText, isSelected && styles.meetupChipTextActive]}>
+                          {spot}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+
+              {/* Safety Checklist Box */}
+              <View style={styles.safetyChecklistBox}>
+                <Text style={styles.safetyChecklistTitle}>KNUST Student Safety Checklist</Text>
+                <Text style={styles.safetyChecklistItem}>✓ Meet in public, well-lit campus spots</Text>
+                <Text style={styles.safetyChecklistItem}>✓ Inspect service/item before releasing payment</Text>
+                <Text style={styles.safetyChecklistItem}>✓ Release escrow funds in your Profile when satisfied</Text>
+              </View>
+
+              <View style={styles.modalInputGroup}>
+                <Text style={styles.modalLabel}>Student Email</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  value={buyerEmail}
+                  onChangeText={setBuyerEmail}
+                />
+              </View>
+
+              <View style={styles.modalInputGroup}>
+                <Text style={styles.modalLabel}>MTN / Telecel MoMo Number *</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="e.g. 0241234567"
+                  keyboardType="phone-pad"
+                  value={momoNumber}
+                  onChangeText={setMomoNumber}
+                />
+              </View>
+
+              <View style={styles.modalBtnRow}>
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => setPaymentModalVisible(false)}
+                >
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.modalSubmitBtn}
+                  onPress={handleInitiateMoMoPayment}
+                  disabled={isProcessing}
+                >
+                  <Text style={styles.modalSubmitText}>
+                    {isProcessing ? 'Sending Prompt...' : '🔒 Pay with Escrow'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Write a Review Modal */}
+      <Modal visible={reviewModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>📱 Mobile Money Checkout</Text>
+            <Text style={styles.modalTitle}>⭐ Review {hustle.sellerName}</Text>
             <Text style={styles.modalSubtitle}>
-              Paying <Text style={{ fontWeight: '800' }}>GH₵ {hustle.price}</Text> to {hustle.sellerName}
+              Share honest feedback about "{hustle.title}" to help fellow KNUST students.
             </Text>
 
+            {/* Star Rating Selector */}
+            <View style={styles.starPickerRow}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <TouchableOpacity
+                  key={star}
+                  onPress={() => setNewRating(star)}
+                  style={styles.starPickerItem}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.starPickerText, star <= newRating && styles.starPickerActive]}>
+                    ★
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={styles.ratingDescriptor}>
+              {newRating === 5
+                ? 'Excellent / Highly Recommended! 🌟'
+                : newRating === 4
+                ? 'Very Good Service 👍'
+                : newRating === 3
+                ? 'Average / Decent ⚖️'
+                : newRating === 2
+                ? 'Needs Improvement ⚠️'
+                : 'Poor Experience ❌'}
+            </Text>
+
+            {/* Comment Input */}
             <View style={styles.modalInputGroup}>
-              <Text style={styles.modalLabel}>Student Email</Text>
+              <Text style={styles.modalLabel}>Your Feedback *</Text>
               <TextInput
-                style={styles.modalInput}
-                value={buyerEmail}
-                onChangeText={setBuyerEmail}
+                style={[styles.modalInput, { height: 90, textAlignVertical: 'top' }]}
+                placeholder="How was the punctuality, communication, and quality of work?"
+                multiline
+                numberOfLines={3}
+                value={newComment}
+                onChangeText={setNewComment}
               />
             </View>
 
-            <View style={styles.modalInputGroup}>
-              <Text style={styles.modalLabel}>MTN / Telecel MoMo Number *</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="e.g. 0241234567"
-                keyboardType="phone-pad"
-                value={momoNumber}
-                onChangeText={setMomoNumber}
-              />
-            </View>
-
+            {/* Modal Buttons */}
             <View style={styles.modalBtnRow}>
               <TouchableOpacity
                 style={styles.modalCancelBtn}
-                onPress={() => setPaymentModalVisible(false)}
+                onPress={() => setReviewModalVisible(false)}
               >
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.modalSubmitBtn}
-                onPress={handleInitiateMoMoPayment}
-                disabled={isProcessing}
+                style={styles.submitReviewBtn}
+                onPress={handleSubmitReview}
+                disabled={isSubmittingReview}
               >
-                <Text style={styles.modalSubmitText}>
-                  {isProcessing ? 'Sending Prompt...' : 'Send MoMo Prompt'}
-                </Text>
+                {isSubmittingReview ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.submitReviewBtnText}>Post Review</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -527,6 +892,215 @@ const styles = StyleSheet.create({
     color: '#92400E',
     lineHeight: 17,
   },
+  // Status banner
+  statusBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 14,
+    borderWidth: 1,
+  },
+  statusBannerOpen: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+  },
+  statusBannerBusy: {
+    backgroundColor: '#FEFCE8',
+    borderColor: '#FEF08A',
+  },
+  statusBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 8,
+  },
+  statusDot: {
+    fontSize: 14,
+  },
+  statusDotOpen: {
+    color: '#16A34A',
+  },
+  statusDotBusy: {
+    color: '#CA8A04',
+  },
+  statusBannerTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  statusBannerSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  statusToggleBtn: {
+    backgroundColor: '#0F172A',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginLeft: 10,
+  },
+  statusToggleBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+
+  // Delivery mode card
+  deliveryCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 16,
+  },
+  deliveryCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  deliveryCardIcon: {
+    fontSize: 26,
+  },
+  deliveryCardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 2,
+  },
+  deliveryCardDetail: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 16,
+  },
+
+  // Reviews Section
+  reviewsSection: {
+    marginTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingTop: 16,
+    marginBottom: 20,
+  },
+  reviewsHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  reviewsSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  leaveReviewBtn: {
+    backgroundColor: '#0F172A',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  leaveReviewBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  emptyReviews: {
+    padding: 20,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  emptyReviewsText: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+  },
+  reviewItem: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  reviewItemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 6,
+  },
+  reviewAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#1E3A8A',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  reviewAvatarText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  reviewerName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  reviewerProgram: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  starsRow: {
+    flexDirection: 'row',
+    gap: 1,
+  },
+  reviewComment: {
+    fontSize: 13,
+    color: '#334155',
+    lineHeight: 18,
+    marginLeft: 42,
+  },
+
+  // Star Picker
+  starPickerRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 12,
+    marginVertical: 12,
+  },
+  starPickerItem: {
+    padding: 6,
+  },
+  starPickerText: {
+    fontSize: 32,
+    color: '#CBD5E1',
+  },
+  starPickerActive: {
+    color: '#F59E0B',
+  },
+  ratingDescriptor: {
+    textAlign: 'center',
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+    marginBottom: 16,
+  },
+  submitReviewBtn: {
+    flex: 1.5,
+    backgroundColor: '#059669',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  submitReviewBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+
   actionBar: {
     position: 'absolute',
     bottom: 0,
@@ -600,6 +1174,75 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 4,
     marginBottom: 16,
+  },
+  escrowHeaderBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    padding: 10,
+    borderRadius: 12,
+    marginBottom: 12,
+    gap: 8,
+  },
+  escrowBadgeIcon: {
+    fontSize: 22,
+  },
+  escrowBadgeTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#065F46',
+  },
+  escrowBadgeSub: {
+    fontSize: 11,
+    color: '#047857',
+    marginTop: 1,
+  },
+  meetupScroll: {
+    gap: 8,
+    paddingVertical: 4,
+  },
+  meetupChip: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  meetupChipActive: {
+    backgroundColor: '#059669',
+    borderColor: '#059669',
+  },
+  meetupChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  meetupChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  safetyChecklistBox: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 12,
+  },
+  safetyChecklistTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#92400E',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  safetyChecklistItem: {
+    fontSize: 11,
+    color: '#78350F',
+    lineHeight: 16,
   },
   modalInputGroup: {
     marginBottom: 12,

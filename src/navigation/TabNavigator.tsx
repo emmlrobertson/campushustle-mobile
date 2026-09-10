@@ -5,6 +5,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { HomeScreen } from '../screens/HomeScreen';
+import { ExploreScreen } from '../screens/ExploreScreen';
 import { HustleDetailScreen } from '../screens/HustleDetailScreen';
 import { PostHustleScreen } from '../screens/PostHustleScreen';
 import { FavoritesScreen } from '../screens/FavoritesScreen';
@@ -12,6 +13,7 @@ import { ProfileScreen } from '../screens/ProfileScreen';
 
 const Tab = createBottomTabNavigator();
 const HomeStack = createNativeStackNavigator();
+const ExploreStack = createNativeStackNavigator();
 const FavoritesStack = createNativeStackNavigator();
 
 function HomeStackScreen() {
@@ -23,6 +25,15 @@ function HomeStackScreen() {
   );
 }
 
+function ExploreStackScreen() {
+  return (
+    <ExploreStack.Navigator screenOptions={{ headerShown: false }}>
+      <ExploreStack.Screen name="ExploreScreen" component={ExploreScreen} />
+      <ExploreStack.Screen name="HustleDetail" component={HustleDetailScreen} />
+    </ExploreStack.Navigator>
+  );
+}
+
 function FavoritesStackScreen() {
   return (
     <FavoritesStack.Navigator screenOptions={{ headerShown: false }}>
@@ -30,11 +41,6 @@ function FavoritesStackScreen() {
       <FavoritesStack.Screen name="HustleDetail" component={HustleDetailScreen} />
     </FavoritesStack.Navigator>
   );
-}
-
-// Dummy Explore Screen
-function ExploreScreen({ navigation }: any) {
-  return <HomeScreen navigation={navigation} />;
 }
 
 export function TabNavigator() {
@@ -65,7 +71,7 @@ export function TabNavigator() {
         })}
       >
         <Tab.Screen name="Home" component={HomeStackScreen} options={{ tabBarLabel: 'Feed' }} />
-        <Tab.Screen name="Explore" component={ExploreScreen} options={{ tabBarLabel: 'Explore' }} />
+        <Tab.Screen name="Explore" component={ExploreStackScreen} options={{ tabBarLabel: 'Explore' }} />
         
         {/* Central Big Elevated Floating Green '+' Post Button */}
         <Tab.Screen

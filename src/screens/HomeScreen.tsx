@@ -4,6 +4,7 @@ import {
   Text,
   TextInput,
   FlatList,
+  ScrollView,
   StyleSheet,
   TouchableOpacity,
   SafeAreaView,
@@ -55,6 +56,44 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                   <Text style={styles.clearText}>✕</Text>
                 </TouchableOpacity>
               )}
+            </View>
+
+            {/* Trending Search Suggestion Chips */}
+            <View style={styles.suggestionSection}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.suggestionsScroll}
+              >
+                {[
+                  { label: '📐 Calculus Tutoring', query: 'calculus' },
+                  { label: '📱 Screen Repair', query: 'screen' },
+                  { label: '💇 Knotless Braids', query: 'braids' },
+                  { label: '🎂 Birthday Cake', query: 'cake' },
+                  { label: '🧺 Laundry Runner', query: 'laundry' },
+                  { label: '📸 Photo Shoot', query: 'photo' },
+                  { label: '💻 Web / Graphics', query: 'design' },
+                ].map((item) => {
+                  const isSelected = searchQuery.toLowerCase() === item.query.toLowerCase();
+                  return (
+                    <TouchableOpacity
+                      key={item.query}
+                      style={[styles.suggestionChip, isSelected && styles.suggestionChipActive]}
+                      onPress={() => setSearchQuery(isSelected ? '' : item.query)}
+                      activeOpacity={0.8}
+                    >
+                      <Text
+                        style={[
+                          styles.suggestionChipText,
+                          isSelected && styles.suggestionChipTextActive,
+                        ]}
+                      >
+                        {item.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
             </View>
 
             {/* Category Filter Horizontal Pills */}
@@ -166,6 +205,38 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#94A3B8',
     fontWeight: '700',
+  },
+  suggestionSection: {
+    marginVertical: 6,
+  },
+  suggestionsScroll: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  suggestionChip: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  suggestionChipActive: {
+    backgroundColor: '#059669',
+    borderColor: '#059669',
+  },
+  suggestionChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  suggestionChipTextActive: {
+    color: '#FFFFFF',
   },
   listContent: {
     paddingHorizontal: 16,

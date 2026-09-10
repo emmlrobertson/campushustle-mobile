@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,18 +9,66 @@ import {
   SafeAreaView,
   Alert,
   StatusBar,
+  ActivityIndicator,
 } from 'react-native';
 import { useHustleContext } from '../context/HustleContext';
+import { fetchPaymentHistoryApi, releaseEscrowPaymentApi } from '../services/api';
+import { EscrowTransaction } from '../types';
 
 interface ProfileScreenProps {
   navigation: any;
 }
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
-  const { hustles, favorites, deleteHustle, user, logoutUser, setAuthModalVisible } =
+  const { hustles, favorites, deleteHustle, user, token, logoutUser, setAuthModalVisible } =
     useHustleContext();
 
+  const [orders, setOrders] = useState<EscrowTransaction[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [releasingRef, setReleasingRef] = useState<string | null>(null);
+
   const myHustles = hustles.filter((h) => h.isMyListing);
+
+  useEffect(() => {
+    if (!token) return;
+    setLoadingOrders(true);
+    fetchPaymentHistoryApi(token)
+      .then((data) => {
+        if (data) setOrders(data);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingOrders(false));
+  }, [token]);
+
+  const handleReleaseEscrow = (order: EscrowTransaction) => {
+    Alert.alert(
+      'Confirm Service Received',
+      `Are you sure you want to release GH₵ ${order.amount} to ${order.seller_name}? Only release once you are satisfied with the delivered hustle.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Release Escrow',
+          onPress: async () => {
+            if (!token) return;
+            setReleasingRef(order.reference);
+            try {
+              await releaseEscrowPaymentApi(order.reference, token);
+              setOrders((prev) =>
+                prev.map((o) =>
+                  o.reference === order.reference ? { ...o, escrow_status: 'released' } : o
+                )
+              );
+              Alert.alert('🎉 Escrow Released', `GH₵ ${order.amount} has been paid out to ${order.seller_name}!`);
+            } catch (err: any) {
+              Alert.alert('Error', err.message || 'Could not release escrow.');
+            } finally {
+              setReleasingRef(null);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const handleDelete = (id: string, title: string) => {
     Alert.alert('Delete Hustle', `Are you sure you want to delete "${title}"?`, [
@@ -108,24 +156,64 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
             <Text style={styles.sectionTitle}>My Active Side-Hustles</Text>
           </View>
         }
-        renderItem={({ item }) => (
-          <View style={styles.myHustleCard}>
-            <Image source={{ uri: item.imageUrl }} style={styles.myHustleThumb} />
-            <View style={styles.myHustleInfo}>
-              <Text style={styles.myHustleTitle} numberOfLines={1}>
-                {item.title}
-              </Text>
-              <Text style={styles.myHustlePrice}>GH₵ {item.price}</Text>
-              <Text style={styles.myHustleHostel}>📍 {item.hostelLocation}</Text>
-            </View>
+        renderItem={({ item }) => {
+          const itemStatus = item.status || 'OPEN';
+          const deliveryIcon =
+            item.deliveryMode === 'campus_spot'
+              ? '🎓'
+              : item.deliveryMode === 'at_seller'
+              ? '📍'
+              : item.deliveryMode === 'remote'
+              ? '💻'
+              : '🏠';
+
+          return (
             <TouchableOpacity
-              style={styles.deleteBtn}
-              onPress={() => handleDelete(item.id, item.title)}
+              style={styles.myHustleCard}
+              onPress={() => navigation.navigate('HustleDetail', { hustleId: item.id })}
+              activeOpacity={0.88}
             >
-              <Text style={styles.deleteBtnText}>🗑️</Text>
+              <Image source={{ uri: item.imageUrl }} style={styles.myHustleThumb} />
+              <View style={styles.myHustleInfo}>
+                <View style={styles.myHustleBadgeRow}>
+                  <View
+                    style={[
+                      styles.statusPillMini,
+                      itemStatus === 'OPEN' ? styles.statusPillOpen : styles.statusPillBusy,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.statusDotMini,
+                        itemStatus === 'OPEN' ? styles.dotOpen : styles.dotBusy,
+                      ]}
+                    >
+                      ●
+                    </Text>
+                    <Text style={styles.statusTextMini}>
+                      {itemStatus === 'OPEN' ? 'AVAILABLE' : 'BUSY'}
+                    </Text>
+                  </View>
+                  <Text style={styles.deliveryModeMini}>{deliveryIcon}</Text>
+                </View>
+
+                <Text style={styles.myHustleTitle} numberOfLines={1}>
+                  {item.title}
+                </Text>
+                <Text style={styles.myHustlePrice}>GH₵ {item.price}</Text>
+                <Text style={styles.myHustleHostel}>📍 {item.hostelLocation}</Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.deleteBtn}
+                onPress={() => handleDelete(item.id, item.title)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={styles.deleteBtnText}>🗑️</Text>
+              </TouchableOpacity>
             </TouchableOpacity>
-          </View>
-        )}
+          );
+        }}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>You haven't posted any side-hustles yet.</Text>
@@ -135,6 +223,91 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
             >
               <Text style={styles.postNowText}>➕ Post Your First Hustle</Text>
             </TouchableOpacity>
+          </View>
+        }
+        ListFooterComponent={
+          <View style={styles.ordersSection}>
+            <View style={styles.ordersHeaderRow}>
+              <View>
+                <Text style={styles.sectionTitle}>🛡️ My Escrow & Payment Orders</Text>
+                <Text style={styles.ordersSub}>
+                  Funds held safely until verified campus meetup & delivery
+                </Text>
+              </View>
+              {loadingOrders && <ActivityIndicator size="small" color="#059669" />}
+            </View>
+
+            {orders.length === 0 ? (
+              <View style={styles.emptyOrdersCard}>
+                <Text style={styles.emptyOrdersText}>
+                  No orders yet. When you pay for a side-hustle with MoMo, your transaction and escrow status will appear here!
+                </Text>
+              </View>
+            ) : (
+              orders.map((order) => {
+                const isHeld = (order.escrow_status || 'held') === 'held';
+                const isReleasing = releasingRef === order.reference;
+
+                return (
+                  <View key={order.id || order.reference} style={styles.orderCard}>
+                    <View style={styles.orderCardHeader}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.orderSeller}>Hustler: {order.seller_name}</Text>
+                        <Text style={styles.orderAmount}>GH₵ {order.amount}</Text>
+                      </View>
+
+                      <View
+                        style={[
+                          styles.escrowBadge,
+                          isHeld ? styles.escrowBadgeHeld : styles.escrowBadgeReleased,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.escrowBadgeText,
+                            isHeld ? styles.escrowBadgeTextHeld : styles.escrowBadgeTextReleased,
+                          ]}
+                        >
+                          {isHeld ? '🛡️ HELD IN ESCROW' : '✅ RELEASED'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {order.meetup_spot && (
+                      <View style={styles.orderMeetupRow}>
+                        <Text style={styles.orderMeetupText}>
+                          Meetup Spot: <Text style={{ fontWeight: '700' }}>{order.meetup_spot}</Text>
+                        </Text>
+                      </View>
+                    )}
+
+                    <View style={styles.orderMetaRow}>
+                      <Text style={styles.orderRef}>Ref: {order.reference}</Text>
+                      <Text style={styles.orderDate}>
+                        {new Date(order.created_at).toLocaleDateString()}
+                      </Text>
+                    </View>
+
+                    {isHeld && (
+                      <TouchableOpacity
+                        style={styles.releaseBtn}
+                        onPress={() => handleReleaseEscrow(order)}
+                        disabled={isReleasing}
+                        activeOpacity={0.85}
+                      >
+                        {isReleasing ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <Text style={styles.releaseBtnText}>
+                            ✅ Confirm Received (Release GH₵ {order.amount})
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              })
+            )}
           </View>
         }
       />
@@ -294,6 +467,43 @@ const styles = StyleSheet.create({
   myHustleInfo: {
     flex: 1,
   },
+  myHustleBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 3,
+  },
+  statusPillMini: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    gap: 4,
+  },
+  statusPillOpen: {
+    backgroundColor: '#DCFCE7',
+  },
+  statusPillBusy: {
+    backgroundColor: '#FEF9C3',
+  },
+  statusDotMini: {
+    fontSize: 8,
+  },
+  dotOpen: {
+    color: '#16A34A',
+  },
+  dotBusy: {
+    color: '#CA8A04',
+  },
+  statusTextMini: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#334155',
+  },
+  deliveryModeMini: {
+    fontSize: 12,
+  },
   myHustleTitle: {
     fontSize: 14,
     fontWeight: '700',
@@ -369,5 +579,127 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 14,
+  },
+  // Orders & Escrow Styles
+  ordersSection: {
+    marginTop: 24,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    paddingTop: 18,
+    marginBottom: 20,
+  },
+  ordersHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  ordersSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  emptyOrdersCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+  },
+  emptyOrdersText: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  orderCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  orderCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  orderSeller: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  orderAmount: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#059669',
+    marginTop: 2,
+  },
+  escrowBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  escrowBadgeHeld: {
+    backgroundColor: '#FEF3C7',
+  },
+  escrowBadgeReleased: {
+    backgroundColor: '#DCFCE7',
+  },
+  escrowBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  escrowBadgeTextHeld: {
+    color: '#B45309',
+  },
+  escrowBadgeTextReleased: {
+    color: '#15803D',
+  },
+  orderMeetupRow: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: 8,
+  },
+  orderMeetupText: {
+    fontSize: 12,
+    color: '#334155',
+  },
+  orderMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  orderRef: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '600',
+  },
+  orderDate: {
+    fontSize: 11,
+    color: '#94A3B8',
+  },
+  releaseBtn: {
+    backgroundColor: '#059669',
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  releaseBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 13,
   },
 });

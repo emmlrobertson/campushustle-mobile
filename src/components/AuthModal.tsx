@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { KNUST_LOCATIONS } from '../data/mockData';
-import { registerStudentApi, loginStudentApi } from '../services/api';
+import { registerStudentApi, loginStudentApi, formatGhanaPhoneNumber } from '../services/api';
 import { StudentProfile } from '../types';
 
 interface AuthModalProps {
@@ -57,11 +57,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
       return;
     }
 
+    if (password.length < 6) {
+      Alert.alert('Weak Password', 'Password must be at least 6 characters long.');
+      return;
+    }
+
     if (!email.trim().toLowerCase().endsWith('@st.knust.edu.gh')) {
       Alert.alert(
         'Student Email Required',
         'Registration is restricted strictly to valid KNUST student emails ending in @st.knust.edu.gh.'
       );
+      return;
+    }
+
+    const sanitizedWhatsApp = formatGhanaPhoneNumber(whatsAppNumber.trim());
+    if (!sanitizedWhatsApp || sanitizedWhatsApp.length < 10) {
+      Alert.alert('Invalid Contact', 'Please enter a valid Ghana phone number (e.g. 0241234567).');
       return;
     }
 
@@ -73,7 +84,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
         password,
         program: program.trim(),
         hostelLocation,
-        whatsAppNumber: whatsAppNumber.trim(),
+        whatsAppNumber: sanitizedWhatsApp,
         campus: 'knust',
       });
 

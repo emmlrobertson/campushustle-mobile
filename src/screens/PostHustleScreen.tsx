@@ -9,10 +9,13 @@ import {
   SafeAreaView,
   Alert,
   StatusBar,
+  Image,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useHustleContext } from '../context/HustleContext';
 import { CATEGORIES, KNUST_LOCATIONS } from '../data/mockData';
-import { CategoryId, PriceType } from '../types';
+import { CategoryId, PriceType, DeliveryMode } from '../types';
+import { formatGhanaPhoneNumber } from '../services/api';
 
 interface PostHustleScreenProps {
   navigation: any;
@@ -25,22 +28,51 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
   const [category, setCategory] = useState<CategoryId>('tutoring');
   const [price, setPrice] = useState('');
   const [priceType, setPriceType] = useState<PriceType>('flat');
-  const [hostelLocation, setHostelLocation] = useState('Ayeduase');
+  const [hostelLocation, setHostelLocation] = useState('Ayeduase Central');
+  const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>('to_client');
+  const [status, setStatus] = useState<'OPEN' | 'BUSY'>('OPEN');
   const [sellerName, setSellerName] = useState('');
   const [sellerProgram, setSellerProgram] = useState('');
   const [whatsAppNumber, setWhatsAppNumber] = useState('');
   const [description, setDescription] = useState('');
   const [tagsInput, setTagsInput] = useState('');
+  const [customImageUri, setCustomImageUri] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState(
     'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=600&q=80'
   );
+
+  const deliveryOptions: { id: DeliveryMode; label: string; icon: string; desc: string }[] = [
+    { id: 'to_client', label: 'I visit your hostel', icon: '🏠', desc: 'Travel to client room/hostel' },
+    { id: 'at_seller', label: 'Come to my hostel', icon: '📍', desc: 'Client visits my room/hostel' },
+    { id: 'campus_spot', label: 'Meet on campus', icon: '🎓', desc: 'CCB, Library, Brunei Market' },
+    { id: 'remote', label: 'Remote / Online', icon: '💻', desc: 'WhatsApp, Zoom, Email' },
+  ];
+
+  const pickImage = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.7,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const pickedUri = result.assets[0].uri;
+        setCustomImageUri(pickedUri);
+        setImageUrl(pickedUri);
+      }
+    } catch (err) {
+      Alert.alert('Image Error', 'Unable to load photo from gallery.');
+    }
+  };
 
   useEffect(() => {
     if (user) {
       setSellerName(user.name);
       setSellerProgram(user.program);
       setWhatsAppNumber(user.whatsAppNumber);
-      setHostelLocation(user.hostelLocation || 'Ayeduase');
+      setHostelLocation(user.hostelLocation || 'Ayeduase Central');
     }
   }, [user]);
 
@@ -84,8 +116,9 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
       Alert.alert('Invalid Price', 'Please enter a valid price in GH₵.');
       return;
     }
-    if (!whatsAppNumber.trim()) {
-      Alert.alert('Missing Contact', 'Please enter your WhatsApp contact number.');
+    const sanitizedWhatsApp = formatGhanaPhoneNumber(whatsAppNumber.trim());
+    if (!sanitizedWhatsApp || sanitizedWhatsApp.length < 10) {
+      Alert.alert('Invalid Contact', 'Please enter a valid WhatsApp phone number (e.g. 0241234567).');
       return;
     }
     if (!description.trim()) {
@@ -108,14 +141,16 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
       price: Number(price),
       priceType,
       hostelLocation,
+      sellerId: user.id,
       sellerName,
       sellerProgram,
       campus: 'knust',
-      whatsAppNumber,
+      whatsAppNumber: sanitizedWhatsApp,
       description,
       tags,
       imageUrl,
-      status: 'OPEN',
+      deliveryMode,
+      status,
     });
 
     Alert.alert('🎉 Success!', 'Your side-hustle is now live on CampusHustle KNUST!', [
@@ -140,7 +175,7 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
           <Text style={styles.label}>Hustle Title *</Text>
           <TextInput
             style={styles.textInput}
-            placeholder="e.g. Calculus Tutoring, Laptop Formatting, Hair Braiding"
+            placeholder="e.g. Calculus Tutoring, Laptop Formatting, Knotless Braids"
             value={title}
             onChangeText={setTitle}
           />
@@ -166,6 +201,62 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
               );
             })}
           </ScrollView>
+        </View>
+
+        {/* Service / Delivery Mode */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Service / Meeting Mode *</Text>
+          <View style={styles.deliveryContainer}>
+            {deliveryOptions.map((opt) => {
+              const isSelected = deliveryMode === opt.id;
+              return (
+                <TouchableOpacity
+                  key={opt.id}
+                  style={[styles.deliveryCard, isSelected && styles.selectedDeliveryCard]}
+                  onPress={() => setDeliveryMode(opt.id)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.deliveryIcon}>{opt.icon}</Text>
+                  <View style={styles.deliveryInfo}>
+                    <Text style={[styles.deliveryTitle, isSelected && styles.selectedDeliveryText]}>
+                      {opt.label}
+                    </Text>
+                    <Text style={[styles.deliveryDesc, isSelected && styles.selectedDeliverySub]}>
+                      {opt.desc}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* Availability Toggle */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Initial Availability Status *</Text>
+          <View style={styles.statusToggleRow}>
+            <TouchableOpacity
+              style={[styles.statusOption, status === 'OPEN' && styles.statusOptionOpen]}
+              onPress={() => setStatus('OPEN')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.statusOptionDot}>●</Text>
+              <Text style={[styles.statusOptionLabel, status === 'OPEN' && styles.statusOptionLabelOpen]}>
+                Available for Orders
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.statusOption, status === 'BUSY' && styles.statusOptionBusy]}
+              onPress={() => setStatus('BUSY')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.statusOptionDotBusy}>●</Text>
+              <Text style={[styles.statusOptionLabel, status === 'BUSY' && styles.statusOptionLabelBusy]}>
+                Busy with Lectures
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Price & Price Type */}
@@ -208,7 +299,7 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
 
         {/* Hostel / Location */}
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Hostel / Location at KNUST *</Text>
+          <Text style={styles.label}>Hostel / Base Location at KNUST *</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillContainer}>
             {KNUST_LOCATIONS.filter((l) => l !== 'All Locations').map((loc) => {
               const isSelected = hostelLocation === loc;
@@ -239,7 +330,7 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
             <Text style={styles.label}>WhatsApp No. *</Text>
             <TextInput
               style={styles.textInput}
-              placeholder="e.g. 233551234567"
+              placeholder="e.g. 0241234567"
               keyboardType="phone-pad"
               value={whatsAppNumber}
               onChangeText={setWhatsAppNumber}
@@ -270,17 +361,45 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
           />
         </View>
 
-        {/* Banner Image Preset */}
+        {/* Portfolio Photo Upload */}
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Cover Image Preset</Text>
+          <Text style={styles.label}>Photo of Your Work / Products</Text>
+          {customImageUri ? (
+            <View style={styles.previewContainer}>
+              <Image source={{ uri: customImageUri }} style={styles.previewImage} />
+              <TouchableOpacity
+                style={styles.removePhotoBtn}
+                onPress={() => {
+                  setCustomImageUri(null);
+                  setImageUrl(presetImages[0].url);
+                }}
+              >
+                <Text style={styles.removePhotoText}>✕ Remove Photo</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.uploadBtn} onPress={pickImage} activeOpacity={0.8}>
+              <Text style={styles.uploadIcon}>📷</Text>
+              <Text style={styles.uploadBtnText}>Upload Photo from Gallery / Device</Text>
+              <Text style={styles.uploadSubtext}>Show off hair you braided, items you sell, or past work</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Or Preset Images */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.subLabel}>Or select a quick stock preset:</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillContainer}>
             {presetImages.map((preset) => (
               <TouchableOpacity
                 key={preset.label}
-                style={[styles.chip, imageUrl === preset.url && styles.selectedChip]}
-                onPress={() => setImageUrl(preset.url)}
+                style={[styles.chip, imageUrl === preset.url && !customImageUri && styles.selectedChip]}
+                onPress={() => {
+                  setCustomImageUri(null);
+                  setImageUrl(preset.url);
+                }}
               >
-                <Text style={[styles.chipText, imageUrl === preset.url && styles.selectedChipText]}>
+                <Text style={[styles.chipText, imageUrl === preset.url && !customImageUri && styles.selectedChipText]}>
                   {preset.label}
                 </Text>
               </TouchableOpacity>
@@ -438,6 +557,150 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '800',
+  },
+  deliveryContainer: {
+    gap: 8,
+  },
+  deliveryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 10,
+  },
+  selectedDeliveryCard: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#059669',
+    borderWidth: 1.5,
+  },
+  deliveryIcon: {
+    fontSize: 22,
+    marginRight: 10,
+  },
+  deliveryInfo: {
+    flex: 1,
+  },
+  deliveryTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  selectedDeliveryText: {
+    color: '#059669',
+    fontWeight: '800',
+  },
+  deliveryDesc: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  selectedDeliverySub: {
+    color: '#047857',
+  },
+  statusToggleRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  statusOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+  },
+  statusOptionOpen: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#10B981',
+  },
+  statusOptionBusy: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#F59E0B',
+  },
+  statusOptionDot: {
+    fontSize: 10,
+    color: '#10B981',
+    marginRight: 6,
+  },
+  statusOptionDotBusy: {
+    fontSize: 10,
+    color: '#F59E0B',
+    marginRight: 6,
+  },
+  statusOptionLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  statusOptionLabelOpen: {
+    color: '#065F46',
+    fontWeight: '800',
+  },
+  statusOptionLabelBusy: {
+    color: '#92400E',
+    fontWeight: '800',
+  },
+  uploadBtn: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#CBD5E1',
+    borderStyle: 'dashed',
+    borderRadius: 14,
+    padding: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  uploadIcon: {
+    fontSize: 28,
+    marginBottom: 6,
+  },
+  uploadBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#059669',
+    marginBottom: 2,
+  },
+  uploadSubtext: {
+    fontSize: 11,
+    color: '#64748B',
+    textAlign: 'center',
+  },
+  previewContainer: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+    position: 'relative',
+  },
+  previewImage: {
+    width: '100%',
+    height: 180,
+    resizeMode: 'cover',
+  },
+  removePhotoBtn: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  removePhotoText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  subLabel: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
+    marginBottom: 8,
   },
   loggedOutContainer: {
     flex: 1,

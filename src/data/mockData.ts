@@ -1,4 +1,4 @@
-import { CategoryOption, Hustle, StudentProfile } from '../types';
+import { CategoryOption, Hustle, StudentProfile, Review } from '../types';
 
 export const CATEGORIES: CategoryOption[] = [
   { id: 'all', label: 'All', icon: '🔥' },
@@ -13,17 +13,20 @@ export const CATEGORIES: CategoryOption[] = [
 
 export const KNUST_LOCATIONS = [
   'All Locations',
-  'Ayeduase',
+  'Ayeduase Central',
+  'Ayeduase New Site',
   'Kotei',
-  'Brunei',
   'Gaza',
+  'Boadi',
+  'Kentinkrono',
+  'Brunei Complex',
   'Katanga (University Hall)',
   'Conti (Unity Hall)',
   'Africa Hall',
   'Independence Hall',
   'Queens Hall',
   'Republic Hall',
-  'Bomso',
+  'Bomso / Ayigya',
 ];
 
 export const CURRENT_USER: StudentProfile = {
@@ -31,7 +34,7 @@ export const CURRENT_USER: StudentProfile = {
   name: 'Kwame Mensah',
   program: 'BSc. Computer Science (Level 300)',
   campus: 'knust',
-  hostelLocation: 'Ayeduase',
+  hostelLocation: 'Ayeduase Central',
   whatsAppNumber: '233551234567',
   bio: 'Passionate coder and tech guy at KNUST. Building web & mobile apps and tutoring first-year CS students!',
   avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
@@ -51,10 +54,11 @@ export const INITIAL_HUSTLES: Hustle[] = [
     hostelLocation: 'Kotei',
     whatsAppNumber: '233241234567',
     momoNumber: '0241234567',
-    rating: 4.6,
+    rating: 4.8,
     reviewCount: 31,
     imageUrl: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=600&q=80',
     tags: ['Tutoring', 'Maths', 'Exams', 'CS'],
+    deliveryMode: 'campus_spot',
     createdAt: '2026-09-01T10:00:00Z',
     isFeatured: true,
     status: 'OPEN',
@@ -72,10 +76,11 @@ export const INITIAL_HUSTLES: Hustle[] = [
     hostelLocation: 'Gaza',
     whatsAppNumber: '233509876543',
     momoNumber: '0509876543',
-    rating: 4.8,
+    rating: 4.9,
     reviewCount: 55,
     imageUrl: 'https://images.unsplash.com/photo-1597740985671-2a8a3b80502e?auto=format&fit=crop&w=600&q=80',
     tags: ['Tech Fix', 'Screen Repair', 'Phone', 'Battery'],
+    deliveryMode: 'to_client',
     createdAt: '2026-09-02T14:30:00Z',
     isFeatured: true,
     status: 'BUSY',
@@ -92,10 +97,11 @@ export const INITIAL_HUSTLES: Hustle[] = [
     campus: 'knust',
     hostelLocation: 'Queens Hall',
     whatsAppNumber: '233543210987',
-    rating: 4.9,
+    rating: 5.0,
     reviewCount: 67,
     imageUrl: 'https://images.unsplash.com/photo-1560869713-7d0a29430803?auto=format&fit=crop&w=600&q=80',
     tags: ['Beauty', 'Hair', 'Braids', 'Wigs'],
+    deliveryMode: 'to_client',
     createdAt: '2026-09-03T09:15:00Z',
     isFeatured: true,
     status: 'OPEN',
@@ -116,7 +122,53 @@ export const INITIAL_HUSTLES: Hustle[] = [
     reviewCount: 19,
     imageUrl: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=600&q=80',
     tags: ['Media', 'Graduation', 'Portraits'],
+    deliveryMode: 'campus_spot',
     createdAt: '2026-09-04T18:00:00Z',
     status: 'OPEN',
   },
 ];
+
+export const SAMPLE_REVIEWS: Record<string, Review[]> = {
+  hst_01: [
+    {
+      id: 'rev_1',
+      hustleId: 'hst_01',
+      reviewerName: 'Kofi Mensah',
+      reviewerProgram: 'Computer Science (L200)',
+      rating: 5,
+      comment: 'Saved my Calculus 252 mid-sem! Explains concepts super clearly at CCB.',
+      createdAt: '2026-09-05T12:00:00Z',
+    },
+    {
+      id: 'rev_2',
+      hustleId: 'hst_01',
+      reviewerName: 'Akosua Darko',
+      reviewerProgram: 'Electrical Eng (L300)',
+      rating: 4,
+      comment: 'Great tutor with plenty of solved past questions.',
+      createdAt: '2026-09-04T15:30:00Z',
+    },
+  ],
+  hst_02: [
+    {
+      id: 'rev_3',
+      hustleId: 'hst_02',
+      reviewerName: 'Yaw Osei',
+      reviewerProgram: 'Civil Eng (L400)',
+      rating: 5,
+      comment: 'Came right to my room in Katanga and fixed my cracked screen in under 25 mins. Highly recommended!',
+      createdAt: '2026-09-06T18:00:00Z',
+    },
+  ],
+  hst_03: [
+    {
+      id: 'rev_4',
+      hustleId: 'hst_03',
+      reviewerName: 'Yaa Asantewaa',
+      reviewerProgram: 'Pharmacy (L300)',
+      rating: 5,
+      comment: 'Neat knotless braids and painless! Came all the way to Africa Hall.',
+      createdAt: '2026-09-07T09:00:00Z',
+    },
+  ],
+};
