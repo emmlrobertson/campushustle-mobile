@@ -84,9 +84,11 @@ export const HustleProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     try {
       const data = await fetchHustlesFromApi({ campus: selectedCampus });
       if (data && data.length > 0) {
-        setHustles(data);
+        const mergedMap = new Map<string, Hustle>();
+        INITIAL_HUSTLES.forEach((h) => mergedMap.set(h.id, h));
+        data.forEach((h) => mergedMap.set(h.id, h));
+        setHustles(Array.from(mergedMap.values()));
       } else {
-        // Fall back to sample listings if server returns empty/offline
         setHustles(INITIAL_HUSTLES);
       }
     } catch (e) {
@@ -99,6 +101,12 @@ export const HustleProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   useEffect(() => {
     loadHustles();
   }, [selectedCampus]);
+
+  const setSelectedCampusWithReset = (campus: CampusId) => {
+    setSelectedCampus(campus);
+    setSelectedLocation('All Locations');
+    setSearchQuery('');
+  };
 
   const loginUser = (newUser: StudentProfile, newToken: string) => {
     setUser(newUser);
@@ -238,7 +246,7 @@ export const HustleProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         setSearchQuery,
         setSelectedCategory,
         setSelectedLocation,
-        setSelectedCampus,
+        setSelectedCampus: setSelectedCampusWithReset,
         refreshHustles: loadHustles,
       }}
     >

@@ -15,14 +15,23 @@ import { Header } from '../components/Header';
 import { CategoryFilter } from '../components/CategoryFilter';
 import { LocationFilter } from '../components/LocationFilter';
 import { HustleCard } from '../components/HustleCard';
+import { CAMPUS_METADATA } from '../data/mockData';
 
 interface HomeScreenProps {
   navigation: any;
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
-  const { filteredHustles, searchQuery, setSearchQuery, selectedLocation, selectedCategory } =
-    useHustleContext();
+  const {
+    filteredHustles,
+    searchQuery,
+    setSearchQuery,
+    selectedLocation,
+    selectedCategory,
+    selectedCampus,
+  } = useHustleContext();
+
+  const campusInfo = CAMPUS_METADATA[selectedCampus] || CAMPUS_METADATA.knust;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -149,7 +158,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             ) : (
               <>
                 <Text style={styles.emptyIcon}>🎓🔥</Text>
-                <Text style={styles.emptyTitle}>Welcome to CampusHustle KNUST!</Text>
+                <Text style={styles.emptyTitle}>Welcome to CampusHustle {campusInfo.shortName}!</Text>
                 <Text style={styles.emptySubtitle}>
                   Be the pioneer student to publish a side-hustle & earn from your classmates today!
                 </Text>

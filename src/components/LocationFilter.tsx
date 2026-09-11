@@ -8,14 +8,16 @@ import {
   ScrollView,
   TouchableWithoutFeedback,
 } from 'react-native';
-import { KNUST_LOCATIONS } from '../data/mockData';
+import { CAMPUS_LOCATIONS, CAMPUS_METADATA } from '../data/mockData';
 import { useHustleContext } from '../context/HustleContext';
 
 export const LocationFilter: React.FC = () => {
-  const { selectedLocation, setSelectedLocation } = useHustleContext();
+  const { selectedLocation, setSelectedLocation, selectedCampus } = useHustleContext();
   const [modalVisible, setModalVisible] = useState(false);
 
   const isFiltered = selectedLocation !== 'All Locations';
+  const campusLocations = CAMPUS_LOCATIONS[selectedCampus] || CAMPUS_LOCATIONS.knust;
+  const campusName = CAMPUS_METADATA[selectedCampus]?.shortName || 'Campus';
 
   return (
     <View style={styles.container}>
@@ -27,7 +29,7 @@ export const LocationFilter: React.FC = () => {
         >
           <Text style={styles.pinIcon}>📍</Text>
           <Text style={[styles.btnText, isFiltered && styles.activeBtnText]} numberOfLines={1}>
-            {isFiltered ? selectedLocation : 'Filter by Hostel / Area'}
+            {isFiltered ? selectedLocation : `Filter by ${campusName} Hostel / Area`}
           </Text>
           <Text style={styles.arrowIcon}>▼</Text>
         </TouchableOpacity>
@@ -50,14 +52,14 @@ export const LocationFilter: React.FC = () => {
             <TouchableWithoutFeedback>
               <View style={styles.dropdownMenu}>
                 <View style={styles.menuHeader}>
-                  <Text style={styles.menuTitle}>Select Hostel / Campus Area</Text>
+                  <Text style={styles.menuTitle}>Select {campusName} Hostel / Area</Text>
                   <TouchableOpacity onPress={() => setModalVisible(false)}>
                     <Text style={styles.closeBtn}>✕</Text>
                   </TouchableOpacity>
                 </View>
 
                 <ScrollView style={styles.menuList} showsVerticalScrollIndicator={false}>
-                  {KNUST_LOCATIONS.map((loc) => {
+                  {campusLocations.map((loc) => {
                     const isSelected = selectedLocation === loc;
                     return (
                       <TouchableOpacity
@@ -69,7 +71,7 @@ export const LocationFilter: React.FC = () => {
                         }}
                       >
                         <Text style={[styles.menuItemText, isSelected && styles.selectedMenuItemText]}>
-                          {loc === 'All Locations' ? '📍 All KNUST Locations' : `📍 ${loc}`}
+                          {loc === 'All Locations' ? `📍 All ${campusName} Locations` : `📍 ${loc}`}
                         </Text>
                         {isSelected && <Text style={styles.checkmark}>✓</Text>}
                       </TouchableOpacity>

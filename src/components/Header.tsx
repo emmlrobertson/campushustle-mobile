@@ -23,6 +23,12 @@ export const Header: React.FC = () => {
     ucc: 'UCC',
   };
 
+  const meetupHubs: Record<CampusId, string> = {
+    knust: 'Recommended safe meeting locations at KNUST: CCB Ground Floor, Main Library Forecourt, and Brunei Market.',
+    ug_legon: 'Recommended safe meeting locations at UG Legon: Balme Library Forecourt, Night Market Hub, and Central Cafeteria.',
+    ucc: 'Recommended safe meeting locations at UCC: Sam Jonah Library, Science Quadrangle, and Casford Field.',
+  };
+
   const campuses: { id: CampusId; name: string; city: string; icon: string }[] = [
     { id: 'knust', name: 'Kwame Nkrumah Univ. of Science & Tech', city: 'Kumasi', icon: '🏛️' },
     { id: 'ug_legon', name: 'University of Ghana (Legon)', city: 'Accra', icon: '🎓' },
@@ -125,7 +131,7 @@ export const Header: React.FC = () => {
             <View style={styles.alertCard}>
               <Text style={styles.alertCardTitle}>📍 Safe Campus Meetup Hubs</Text>
               <Text style={styles.alertCardBody}>
-                Recommended safe meeting locations: CCB Ground Floor, Main Library Forecourt, and Brunei Market.
+                {meetupHubs[selectedCampus]}
               </Text>
             </View>
 

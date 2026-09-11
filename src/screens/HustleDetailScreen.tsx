@@ -23,7 +23,7 @@ import {
   submitHustleReviewApi,
   toggleHustleStatusApi,
 } from '../services/api';
-import { SAMPLE_REVIEWS } from '../data/mockData';
+import { SAMPLE_REVIEWS, CAMPUS_METADATA } from '../data/mockData';
 import { Review } from '../types';
 
 const showAlert = (title: string, message: string, onOk?: () => void) => {
@@ -58,11 +58,43 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
   const hustle = hustles.find((h) => h.id === hustleId);
   const favorite = isFavorite(hustleId);
 
+  const campusInfo = CAMPUS_METADATA[hustle?.campus || 'knust'] || CAMPUS_METADATA.knust;
+
+  const campusMeetupSpots: Record<string, string[]> = {
+    knust: [
+      '🏛️ CCB Ground Floor (Commercial Bank)',
+      '📚 Main Library Forecourt',
+      '🏪 Brunei Complex Market',
+      '🏢 Traditional Hall Porter’s Lodge',
+      '🍽️ Royal Parade Grounds',
+      '🏠 Private Hostel Room',
+    ],
+    ug_legon: [
+      '📚 Balme Library Forecourt',
+      '🌙 Night Market Hub',
+      '☕ Central Cafeteria',
+      '🏢 Pentagon Porter’s Lodge',
+      '🎓 JQB Forecourt',
+      '🏠 Private Hostel Room',
+    ],
+    ucc: [
+      '📚 Sam Jonah Library Forecourt',
+      '🔬 Science Quadrangle',
+      '🏟️ Casford Field & Pavilion',
+      '🏢 Oguaa Hall Porter’s Lodge',
+      '🌴 Amamoma Junction Hub',
+      '🏠 Private Hostel Room',
+    ],
+  };
+
+  const availableMeetupSpots =
+    campusMeetupSpots[hustle?.campus || 'knust'] || campusMeetupSpots.knust;
+
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
-  const [buyerEmail, setBuyerEmail] = useState('student@st.knust.edu.gh');
+  const [buyerEmail, setBuyerEmail] = useState(user?.email || `student@${campusInfo.domain}`);
   const [momoNumber, setMomoNumber] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [selectedMeetupSpot, setSelectedMeetupSpot] = useState('🏛️ CCB Ground Floor (Near Commercial Bank)');
+  const [selectedMeetupSpot, setSelectedMeetupSpot] = useState(availableMeetupSpots[0]);
 
   // Reviews State
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -210,13 +242,13 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
     setNewComment('');
     setNewRating(5);
 
-    showAlert('⭐ Thank You!', 'Your review has been published for your fellow KNUST classmates.');
+    showAlert('⭐ Thank You!', `Your review has been published for your fellow ${campusInfo.shortName} classmates.`);
   };
 
   const handleWhatsAppChat = () => {
     const cleanPhone = formatGhanaPhoneNumber(hustle.whatsAppNumber);
     const message = encodeURIComponent(
-      `Hi ${hustle.sellerName}! I saw your side-hustle "${hustle.title}" on CampusHustle KNUST. I'd like to request this service at ${hustle.hostelLocation} for GH₵ ${hustle.price}. Are you available?`
+      `Hi ${hustle.sellerName}! I saw your side-hustle "${hustle.title}" on CampusHustle ${campusInfo.shortName}. I'd like to request this service at ${hustle.hostelLocation} for GH₵ ${hustle.price}. Are you available?`
     );
     const webUrl = `https://wa.me/${cleanPhone}?text=${message}`;
 
@@ -278,7 +310,7 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
   const handleShare = async () => {
     try {
       const shareData = {
-        message: `Check out this KNUST student hustle: "${hustle.title}" by ${hustle.sellerName} for GH₵ ${hustle.price} on CampusHustle!`,
+        message: `Check out this ${campusInfo.shortName} student hustle: "${hustle.title}" by ${hustle.sellerName} for GH₵ ${hustle.price} on CampusHustle!`,
       };
       if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
         await navigator.clipboard.writeText(shareData.message);
@@ -363,7 +395,7 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
               <Text style={styles.hostelBadgeText}>📍 {hustle.hostelLocation}</Text>
             </View>
             <View style={styles.campusTag}>
-              <Text style={styles.campusTagText}>KNUST Kumasi</Text>
+              <Text style={styles.campusTagText}>{campusInfo.shortName} {campusInfo.city}</Text>
             </View>
           </View>
 
@@ -537,15 +569,8 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
               <View style={styles.modalInputGroup}>
                 <Text style={styles.modalLabel}>📍 Safe Campus Meetup Spot *</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.meetupScroll}>
-                  {[
-                    '🏛️ CCB Ground Floor',
-                    '📚 Main Library Forecourt',
-                    '🏪 Brunei Complex Market',
-                    '🏢 Hall Porter’s Lodge',
-                    '🍽️ Royal Parade Grounds',
-                    '🏠 Private Hostel Room',
-                  ].map((spot) => {
-                    const isSelected = selectedMeetupSpot.includes(spot.substring(3));
+                  {availableMeetupSpots.map((spot) => {
+                    const isSelected = selectedMeetupSpot === spot;
                     return (
                       <TouchableOpacity
                         key={spot}
@@ -564,7 +589,7 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
 
               {/* Safety Checklist Box */}
               <View style={styles.safetyChecklistBox}>
-                <Text style={styles.safetyChecklistTitle}>KNUST Student Safety Checklist</Text>
+                <Text style={styles.safetyChecklistTitle}>{campusInfo.shortName} Student Safety Checklist</Text>
                 <Text style={styles.safetyChecklistItem}>✓ Meet in public, well-lit campus spots</Text>
                 <Text style={styles.safetyChecklistItem}>✓ Inspect service/item before releasing payment</Text>
                 <Text style={styles.safetyChecklistItem}>✓ Release escrow funds in your Profile when satisfied</Text>
@@ -619,7 +644,7 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>⭐ Review {hustle.sellerName}</Text>
             <Text style={styles.modalSubtitle}>
-              Share honest feedback about "{hustle.title}" to help fellow KNUST students.
+              Share honest feedback about "{hustle.title}" to help fellow {campusInfo.shortName} students.
             </Text>
 
             {/* Star Rating Selector */}

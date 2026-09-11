@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Modal,
   View,
@@ -11,9 +11,10 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
-import { KNUST_LOCATIONS } from '../data/mockData';
+import { CAMPUS_LOCATIONS, CAMPUS_METADATA } from '../data/mockData';
 import { registerStudentApi, loginStudentApi, formatGhanaPhoneNumber } from '../services/api';
 import { StudentProfile } from '../types';
+import { useHustleContext } from '../context/HustleContext';
 
 interface AuthModalProps {
   visible: boolean;
@@ -30,6 +31,12 @@ const showAlert = (title: string, message: string) => {
 };
 
 export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSuccess }) => {
+  const { selectedCampus } = useHustleContext();
+  const campusInfo = CAMPUS_METADATA[selectedCampus] || CAMPUS_METADATA.knust;
+  const availableLocations = (CAMPUS_LOCATIONS[selectedCampus] || CAMPUS_LOCATIONS.knust).filter(
+    (l) => l !== 'All Locations'
+  );
+
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -39,31 +46,67 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [program, setProgram] = useState('');
-  const [hostelLocation, setHostelLocation] = useState('Ayeduase');
+  const [hostelLocation, setHostelLocation] = useState(availableLocations[0] || 'Campus Hostel');
   const [whatsAppNumber, setWhatsAppNumber] = useState('');
 
+  // Update hostel location default when campus changes
+  useEffect(() => {
+    if (availableLocations.length > 0) {
+      setHostelLocation(availableLocations[0]);
+    }
+  }, [selectedCampus]);
+
   const fillDemoData = () => {
-    setName('Kwame Mensah');
-    setEmail(`student_${Math.floor(Math.random() * 900 + 100)}@st.knust.edu.gh`);
-    setPassword('knust2026');
-    setProgram('Computer Engineering (Level 300)');
-    setHostelLocation('Ayeduase');
+    const demoNames = {
+      knust: 'Kwame Mensah',
+      ug_legon: 'Ama Osei',
+      ucc: 'Kojo Mills',
+    };
+    const demoPrograms = {
+      knust: 'BSc. Computer Engineering (Level 300)',
+      ug_legon: 'BSc. Administration (Level 300)',
+      ucc: 'BEd. Science Education (Level 300)',
+    };
+
+    setName(demoNames[selectedCampus] || 'Student Hustler');
+    setEmail(`student_${Math.floor(Math.random() * 900 + 100)}@${campusInfo.emailDomain}`);
+    setPassword('campus2026');
+    setProgram(demoPrograms[selectedCampus] || 'Undergraduate (Level 300)');
+    setHostelLocation(availableLocations[0] || 'Campus Hostel');
     setWhatsAppNumber('0241234567');
     setErrorMessage(null);
   };
 
   const handleLogin = async () => {
     setErrorMessage(null);
-    if (!email.trim() || !password.trim()) {
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (!cleanEmail || !password.trim()) {
       setErrorMessage('Please enter your student email and password.');
       return;
     }
 
+    // Cross-campus verification
+    const expectedDomain = `@${campusInfo.emailDomain}`;
+    if (!cleanEmail.endsWith(expectedDomain)) {
+      let matchedOtherCampus: string | null = null;
+      if (cleanEmail.endsWith('@st.knust.edu.gh')) matchedOtherCampus = 'KNUST';
+      else if (cleanEmail.endsWith('@st.ug.edu.gh')) matchedOtherCampus = 'UG Legon';
+      else if (cleanEmail.endsWith('@stu.ucc.edu.gh')) matchedOtherCampus = 'UCC';
+
+      if (matchedOtherCampus) {
+        setErrorMessage(
+          `This account belongs to ${matchedOtherCampus}. You are currently in the ${campusInfo.shortName} view. Please switch to ${matchedOtherCampus} from the top header to log in.`
+        );
+        return;
+      }
+    }
+
     setIsLoading(true);
     try {
-      const res = await loginStudentApi({ email: email.trim(), password });
+      const res = await loginStudentApi({ email: cleanEmail, password });
       setIsLoading(false);
-      showAlert('🎉 Welcome Back!', `Logged in as ${res.user.name}`);
+      showAlert('🎉 Welcome Back!', `Logged in as ${res.user.name} (${campusInfo.shortName})`);
       onSuccess(res.user, res.token);
       onClose();
     } catch (error: any) {
@@ -92,18 +135,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
       return;
     }
 
-    // Validate university domain
-    const isValidDomain =
-      trimmedEmail.endsWith('@st.knust.edu.gh') ||
-      trimmedEmail.endsWith('@st.ug.edu.gh') ||
-      trimmedEmail.endsWith('@stu.ucc.edu.gh') ||
-      trimmedEmail.includes('.edu.gh') ||
-      trimmedEmail.endsWith('@knust.edu.gh');
+    // Strict Campus Domain Enforcement
+    const expectedDomain = `@${campusInfo.emailDomain}`;
+    if (!trimmedEmail.endsWith(expectedDomain)) {
+      let matchedOtherCampus: string | null = null;
+      if (trimmedEmail.endsWith('@st.knust.edu.gh')) matchedOtherCampus = 'KNUST';
+      else if (trimmedEmail.endsWith('@st.ug.edu.gh')) matchedOtherCampus = 'UG Legon';
+      else if (trimmedEmail.endsWith('@stu.ucc.edu.gh')) matchedOtherCampus = 'UCC';
 
-    if (!isValidDomain) {
-      setErrorMessage(
-        'Student email required (must end with @st.knust.edu.gh). Tap "Quick Demo Fill" below to auto-fill a valid KNUST account.'
-      );
+      if (matchedOtherCampus) {
+        setErrorMessage(
+          `This email belongs to ${matchedOtherCampus}. You are currently in the ${campusInfo.shortName} view. Please switch to ${matchedOtherCampus} from the top header to register.`
+        );
+      } else {
+        setErrorMessage(
+          `Valid ${campusInfo.shortName} student email required (must end with ${expectedDomain}). Tap "Quick Demo Fill" to auto-fill an account.`
+        );
+      }
       return;
     }
 
@@ -122,11 +170,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
         program: trimmedProgram,
         hostelLocation,
         whatsAppNumber: sanitizedWhatsApp,
-        campus: 'knust',
+        campus: selectedCampus,
       });
 
       setIsLoading(false);
-      showAlert('🎓 Account Created!', `Welcome to CampusHustle, ${res.user.name}!`);
+      showAlert('🎓 Account Created!', `Welcome to CampusHustle ${campusInfo.shortName}, ${res.user.name}!`);
       onSuccess(res.user, res.token);
       onClose();
     } catch (error: any) {
@@ -144,7 +192,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
           {/* Header Bar */}
           <View style={styles.header}>
             <Text style={styles.title}>
-              Campus<Text style={styles.greenText}>Hustle</Text> KNUST
+              Campus<Text style={styles.greenText}>Hustle</Text> {campusInfo.shortName}
             </Text>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
               <Text style={styles.closeText}>✕</Text>
@@ -188,14 +236,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
             {mode === 'login' ? (
               <View>
                 <Text style={styles.subtext}>
-                  Log in with your KNUST student email to post hustles & manage your listings.
+                  Log in with your {campusInfo.shortName} student email (@{campusInfo.emailDomain}) to post hustles & manage your listings.
                 </Text>
 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.label}>KNUST Student Email *</Text>
+                  <Text style={styles.label}>{campusInfo.shortName} Student Email *</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="e.g. kmensah@st.knust.edu.gh"
+                    placeholder={`e.g. student@${campusInfo.emailDomain}`}
                     keyboardType="email-address"
                     autoCapitalize="none"
                     value={email}
@@ -228,26 +276,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
                   {isLoading ? (
                     <ActivityIndicator color="#FFFFFF" />
                   ) : (
-                    <Text style={styles.submitBtnText}>🔑 Log In</Text>
+                    <Text style={styles.submitBtnText}>🔑 Log In to {campusInfo.shortName}</Text>
                   )}
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={styles.demoFillBtn}
                   onPress={() => {
-                    setEmail('kmensah@st.knust.edu.gh');
-                    setPassword('secret123');
+                    setEmail(`student@${campusInfo.emailDomain}`);
+                    setPassword('campus2026');
                     setErrorMessage(null);
                   }}
                 >
-                  <Text style={styles.demoFillBtnText}>💡 Demo Fill Login Credentials</Text>
+                  <Text style={styles.demoFillBtnText}>💡 Demo Fill {campusInfo.shortName} Credentials</Text>
                 </TouchableOpacity>
               </View>
             ) : (
               <View>
                 <View style={styles.registerSubHeader}>
                   <Text style={styles.subtext}>
-                    Create your seller profile with your valid @st.knust.edu.gh email.
+                    Create your seller profile with your valid @{campusInfo.emailDomain} email.
                   </Text>
                   <TouchableOpacity style={styles.quickFillTag} onPress={fillDemoData}>
                     <Text style={styles.quickFillTagText}>⚡ Quick Demo Fill</Text>
@@ -268,10 +316,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
                 </View>
 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.label}>KNUST Student Email *</Text>
+                  <Text style={styles.label}>{campusInfo.shortName} Student Email *</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="yourname@st.knust.edu.gh"
+                    placeholder={`yourname@${campusInfo.emailDomain}`}
                     keyboardType="email-address"
                     autoCapitalize="none"
                     value={email}
@@ -300,7 +348,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
                   <Text style={styles.label}>Program & Level *</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="e.g. Computer Engineering (Level 300)"
+                    placeholder="e.g. Administration / Engineering (Level 300)"
                     value={program}
                     onChangeText={(val) => {
                       setProgram(val);
@@ -310,9 +358,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
                 </View>
 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Hostel / Campus Location *</Text>
+                  <Text style={styles.label}>{campusInfo.shortName} Hostel / Area *</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
-                    {KNUST_LOCATIONS.filter((l) => l !== 'All Locations').map((loc) => (
+                    {availableLocations.map((loc) => (
                       <TouchableOpacity
                         key={loc}
                         style={[styles.chip, hostelLocation === loc && styles.selectedChip]}
@@ -348,7 +396,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
                   {isLoading ? (
                     <ActivityIndicator color="#FFFFFF" />
                   ) : (
-                    <Text style={styles.submitBtnText}>🎓 Register Account</Text>
+                    <Text style={styles.submitBtnText}>🎓 Register {campusInfo.shortName} Account</Text>
                   )}
                 </TouchableOpacity>
               </View>

@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useHustleContext } from '../context/HustleContext';
-import { CATEGORIES, KNUST_LOCATIONS } from '../data/mockData';
+import { CATEGORIES, CAMPUS_LOCATIONS, CAMPUS_METADATA } from '../data/mockData';
 import { CategoryId, PriceType, DeliveryMode } from '../types';
 import { formatGhanaPhoneNumber } from '../services/api';
 
@@ -35,13 +35,18 @@ const showAlert = (title: string, message: string, onOk?: () => void) => {
 };
 
 export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }) => {
-  const { addHustle, user, setAuthModalVisible } = useHustleContext();
+  const { addHustle, user, setAuthModalVisible, selectedCampus } = useHustleContext();
+
+  const campusInfo = CAMPUS_METADATA[selectedCampus] || CAMPUS_METADATA.knust;
+  const availableLocations = (CAMPUS_LOCATIONS[selectedCampus] || CAMPUS_LOCATIONS.knust).filter(
+    (l) => l !== 'All Locations'
+  );
 
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<CategoryId>('tutoring');
   const [price, setPrice] = useState('');
   const [priceType, setPriceType] = useState<PriceType>('flat');
-  const [hostelLocation, setHostelLocation] = useState('Ayeduase Central');
+  const [hostelLocation, setHostelLocation] = useState(availableLocations[0] || 'Campus Area');
   const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>('to_client');
   const [status, setStatus] = useState<'OPEN' | 'BUSY'>('OPEN');
   const [sellerName, setSellerName] = useState('');
@@ -61,12 +66,19 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
     setCategory('tech_repair');
     setPrice('150');
     setPriceType('starting_at');
-    setHostelLocation(user?.hostelLocation || 'Ayeduase Central');
+    const defaultHostel =
+      user?.hostelLocation ||
+      (selectedCampus === 'ug_legon'
+        ? 'Pentagon (Diaspora)'
+        : selectedCampus === 'ucc'
+        ? 'Casely Hayford (Casford)'
+        : 'Ayeduase Central');
+    setHostelLocation(defaultHostel);
     setDeliveryMode('to_client');
     setDescription(
-      'Fast 30-minute iPhone screen replacements and original battery repairs right in your hostel room. Guaranteed genuine parts and testing before payment!'
+      `Fast 30-minute iPhone screen replacements and original battery repairs right in your hostel room at ${campusInfo.shortName}. Guaranteed genuine parts and testing before payment!`
     );
-    setTagsInput('iPhone, Screen, Battery, Tech, Repairs');
+    setTagsInput(`iPhone, Screen, Battery, Tech, Repairs, ${campusInfo.shortName}`);
     setErrorMessage(null);
   };
 
@@ -101,9 +113,15 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
       setSellerName(user.name);
       setSellerProgram(user.program);
       setWhatsAppNumber(user.whatsAppNumber);
-      setHostelLocation(user.hostelLocation || 'Ayeduase Central');
+      if (user.hostelLocation) {
+        setHostelLocation(user.hostelLocation);
+      } else if (availableLocations.length > 0) {
+        setHostelLocation(availableLocations[0]);
+      }
+    } else if (availableLocations.length > 0) {
+      setHostelLocation(availableLocations[0]);
     }
-  }, [user]);
+  }, [user, selectedCampus]);
 
   const presetImages = [
     { label: '📚 Study', url: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=600&q=80' },
@@ -119,9 +137,9 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
         <View style={styles.loggedOutContainer}>
           <Text style={styles.loggedOutIcon}>🎓</Text>
-          <Text style={styles.loggedOutTitle}>KNUST Student Login Required</Text>
+          <Text style={styles.loggedOutTitle}>{campusInfo.shortName} Student Login Required</Text>
           <Text style={styles.loggedOutSub}>
-            Please log in or register with your valid @st.knust.edu.gh student email to publish side-hustles on campus.
+            Please log in or register with your valid @{campusInfo.domain} student email to publish side-hustles on {campusInfo.shortName}.
           </Text>
 
           <TouchableOpacity
@@ -163,7 +181,7 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
       .filter((t) => t.length > 0);
 
     if (tags.length === 0) {
-      tags.push('KNUST', category);
+      tags.push(campusInfo.shortName, category);
     }
 
     setIsSubmitting(true);
@@ -178,7 +196,7 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
         sellerId: user.id,
         sellerName,
         sellerProgram,
-        campus: 'knust',
+        campus: selectedCampus,
         whatsAppNumber: sanitizedWhatsApp,
         description: description.trim(),
         tags,
@@ -195,7 +213,7 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
       setDescription('');
       setTagsInput('');
 
-      showAlert('🎉 Success!', 'Your side-hustle is now live on CampusHustle KNUST!', () => {
+      showAlert('🎉 Success!', `Your side-hustle is now live on CampusHustle ${campusInfo.shortName}!`, () => {
         navigation.navigate('Home');
       });
     } catch (err: any) {
@@ -349,9 +367,9 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
 
         {/* Hostel / Location */}
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Hostel / Base Location at KNUST *</Text>
+          <Text style={styles.label}>Hostel / Base Location at {campusInfo.shortName} *</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillContainer}>
-            {KNUST_LOCATIONS.filter((l) => l !== 'All Locations').map((loc) => {
+            {availableLocations.map((loc) => {
               const isSelected = hostelLocation === loc;
               return (
                 <TouchableOpacity

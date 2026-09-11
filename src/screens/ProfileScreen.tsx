@@ -19,6 +19,7 @@ import {
   fetchMyHustlesApi,
 } from '../services/api';
 import { EscrowTransaction, Hustle } from '../types';
+import { CAMPUS_METADATA } from '../data/mockData';
 
 interface ProfileScreenProps {
   navigation: any;
@@ -36,8 +37,18 @@ const showAlert = (title: string, message: string, onOk?: () => void) => {
 };
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
-  const { hustles, favorites, deleteHustle, user, token, logoutUser, setAuthModalVisible } =
-    useHustleContext();
+  const {
+    hustles,
+    favorites,
+    deleteHustle,
+    user,
+    token,
+    logoutUser,
+    setAuthModalVisible,
+    selectedCampus,
+  } = useHustleContext();
+
+  const campusInfo = CAMPUS_METADATA[selectedCampus] || CAMPUS_METADATA.knust;
 
   const [orders, setOrders] = useState<EscrowTransaction[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
@@ -166,9 +177,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
         <View style={styles.loggedOutContainer}>
           <Text style={styles.loggedOutIcon}>👤</Text>
-          <Text style={styles.loggedOutTitle}>KNUST Student Profile</Text>
+          <Text style={styles.loggedOutTitle}>{campusInfo.shortName} Student Profile</Text>
           <Text style={styles.loggedOutSub}>
-            Sign in with your @st.knust.edu.gh email to view your profile, manage active listings, and track saved hustles.
+            Sign in with your @{campusInfo.domain} email to view your profile, manage active listings, and track saved hustles.
           </Text>
 
           <TouchableOpacity
@@ -208,7 +219,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
               <Text style={styles.userEmail}>{user.email}</Text>
               <Text style={styles.userProgram}>{user.program}</Text>
               <View style={styles.locationBadge}>
-                <Text style={styles.locationText}>📍 KNUST • {user.hostelLocation}</Text>
+                <Text style={styles.locationText}>
+                  📍 {user.campus ? CAMPUS_METADATA[user.campus as keyof typeof CAMPUS_METADATA]?.shortName || campusInfo.shortName : campusInfo.shortName} • {user.hostelLocation}
+                </Text>
               </View>
             </View>
 
@@ -226,9 +239,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 
             {/* Expansion Roadmap Callout */}
             <View style={styles.roadmapCard}>
-              <Text style={styles.roadmapTitle}>🚀 Campus Expansion</Text>
+              <Text style={styles.roadmapTitle}>🚀 Campus Network</Text>
               <Text style={styles.roadmapText}>
-                Currently live at <Text style={{ fontWeight: '800' }}>KNUST</Text>! Next campuses scaling up: University of Ghana (UG Legon) & UCC.
+                Live across <Text style={{ fontWeight: '800' }}>KNUST (Kumasi)</Text>, <Text style={{ fontWeight: '800' }}>UG Legon (Accra)</Text>, and <Text style={{ fontWeight: '800' }}>UCC (Cape Coast)</Text> with verified student isolation!
               </Text>
             </View>
 

@@ -13,6 +13,7 @@ import {
 import { useHustleContext } from '../context/HustleContext';
 import { HustleCard } from '../components/HustleCard';
 import { PriceBracket, SortOption, DeliveryMode } from '../types';
+import { CAMPUS_LOCATIONS, CAMPUS_METADATA } from '../data/mockData';
 
 interface ExploreScreenProps {
   navigation: any;
@@ -44,17 +45,6 @@ const DELIVERY_OPTIONS: { id: DeliveryMode | 'all'; label: string; icon: string 
   { id: 'remote', label: 'Remote / Online', icon: '💻' },
 ];
 
-const KNUST_CLUSTERS = [
-  'All Locations',
-  'Ayeduase',
-  'Kotei',
-  'Brunei',
-  'Traditional Halls',
-  'Boadi',
-  'Gaza',
-  'Kentinkrono',
-];
-
 const SORT_OPTIONS: { id: SortOption; label: string }[] = [
   { id: 'recommended', label: '⭐ Recommended' },
   { id: 'price_asc', label: '💵 Price: Low to High' },
@@ -64,7 +54,10 @@ const SORT_OPTIONS: { id: SortOption; label: string }[] = [
 ];
 
 export const ExploreScreen: React.FC<ExploreScreenProps> = ({ navigation }) => {
-  const { hustles } = useHustleContext();
+  const { hustles, selectedCampus } = useHustleContext();
+
+  const campusInfo = CAMPUS_METADATA[selectedCampus] || CAMPUS_METADATA.knust;
+  const campusLocations = CAMPUS_LOCATIONS[selectedCampus] || CAMPUS_LOCATIONS.knust;
 
   const [search, setSearch] = useState('');
   const [selectedPriceBracket, setSelectedPriceBracket] = useState<PriceBracket>('all');
@@ -92,7 +85,7 @@ export const ExploreScreen: React.FC<ExploreScreenProps> = ({ navigation }) => {
   };
 
   const filteredHustles = useMemo(() => {
-    let results = [...hustles];
+    let results = hustles.filter((h) => h.campus === selectedCampus);
 
     // Search query filter
     if (search.trim() !== '') {
@@ -142,7 +135,7 @@ export const ExploreScreen: React.FC<ExploreScreenProps> = ({ navigation }) => {
     });
 
     return results;
-  }, [hustles, search, selectedPriceBracket, selectedDelivery, selectedCluster, sortBy]);
+  }, [hustles, selectedCampus, search, selectedPriceBracket, selectedDelivery, selectedCluster, sortBy]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -152,7 +145,7 @@ export const ExploreScreen: React.FC<ExploreScreenProps> = ({ navigation }) => {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>🧭 Explore Campus Hustles</Text>
         <Text style={styles.headerSubtitle}>
-          Discover verified student side-hustlers across KNUST
+          Discover verified student side-hustlers across {campusInfo.shortName}
         </Text>
       </View>
 
@@ -251,10 +244,10 @@ export const ExploreScreen: React.FC<ExploreScreenProps> = ({ navigation }) => {
               ))}
             </ScrollView>
 
-            {/* KNUST Location Cluster */}
-            <Text style={styles.filterSectionTitle}>📍 KNUST Zone / Hostel Area</Text>
+            {/* Campus Location Cluster */}
+            <Text style={styles.filterSectionTitle}>📍 {campusInfo.shortName} Zone / Hostel Area</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillsRow}>
-              {KNUST_CLUSTERS.map((cluster) => (
+              {campusLocations.map((cluster) => (
                 <TouchableOpacity
                   key={cluster}
                   style={[styles.filterPill, selectedCluster === cluster && styles.filterPillActive]}
