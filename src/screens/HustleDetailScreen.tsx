@@ -13,6 +13,7 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useHustleContext } from '../context/HustleContext';
 import {
@@ -24,6 +25,17 @@ import {
 } from '../services/api';
 import { SAMPLE_REVIEWS } from '../data/mockData';
 import { Review } from '../types';
+
+const showAlert = (title: string, message: string, onOk?: () => void) => {
+  if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined' && window.alert) {
+      window.alert(`${title}\n\n${message}`);
+    }
+    if (onOk) onOk();
+  } else {
+    Alert.alert(title, message, onOk ? [{ text: 'OK', onPress: onOk }] : undefined);
+  }
+};
 
 interface HustleDetailScreenProps {
   route: any;
@@ -137,6 +149,14 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
 
   const handleOpenReviewModal = () => {
     if (!user) {
+      if (Platform.OS === 'web') {
+        showAlert(
+          'Student Login Required',
+          'Please sign in with your student account to rate and review classmates.'
+        );
+        setAuthModalVisible(true);
+        return;
+      }
       Alert.alert(
         'Student Login Required',
         'Please sign in with your student account to rate and review classmates.',
@@ -152,7 +172,7 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
 
   const handleSubmitReview = async () => {
     if (!newComment.trim()) {
-      Alert.alert('Missing Comment', 'Please share a few words about your experience with this side-hustler.');
+      showAlert('Missing Comment', 'Please share a few words about your experience with this side-hustler.');
       return;
     }
 
@@ -190,7 +210,7 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
     setNewComment('');
     setNewRating(5);
 
-    Alert.alert('⭐ Thank You!', 'Your review has been published for your fellow KNUST classmates.');
+    showAlert('⭐ Thank You!', 'Your review has been published for your fellow KNUST classmates.');
   };
 
   const handleWhatsAppChat = () => {
@@ -198,27 +218,37 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
     const message = encodeURIComponent(
       `Hi ${hustle.sellerName}! I saw your side-hustle "${hustle.title}" on CampusHustle KNUST. I'd like to request this service at ${hustle.hostelLocation} for GH₵ ${hustle.price}. Are you available?`
     );
-    const url = `whatsapp://send?phone=${cleanPhone}&text=${message}`;
+    const webUrl = `https://wa.me/${cleanPhone}?text=${message}`;
 
-    Linking.canOpenURL(url)
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined') {
+        window.open(webUrl, '_blank');
+      }
+      return;
+    }
+
+    const appUrl = `whatsapp://send?phone=${cleanPhone}&text=${message}`;
+    Linking.canOpenURL(appUrl)
       .then((supported) => {
         if (supported) {
-          return Linking.openURL(url);
+          return Linking.openURL(appUrl);
         } else {
-          return Linking.openURL(`https://wa.me/${cleanPhone}?text=${message}`);
+          return Linking.openURL(webUrl);
         }
       })
       .catch(() => {
-        Alert.alert(
-          'Contact Info',
-          `WhatsApp Number: +${cleanPhone}\n\nPlease save this number to chat directly.`
-        );
+        Linking.openURL(webUrl).catch(() => {
+          showAlert(
+            'Contact Info',
+            `WhatsApp Number: +${cleanPhone}\n\nPlease save this number to chat directly.`
+          );
+        });
       });
   };
 
   const handleInitiateMoMoPayment = async () => {
-    if (!momoNumber.trim() || momoNumber.length < 10) {
-      Alert.alert('Invalid Number', 'Please enter a valid 10-digit Ghana Mobile Money phone number.');
+    if (!momoNumber.trim() || momoNumber.length < 9) {
+      showAlert('Invalid Number', 'Please enter a valid Ghana Mobile Money phone number (e.g. 0241234567).');
       return;
     }
 
@@ -235,22 +265,27 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
       setPaymentModalVisible(false);
       setIsProcessing(false);
 
-      Alert.alert(
+      showAlert(
         '🛡️ Campus Escrow Protected!',
-        `A payment prompt of GH₵ ${hustle.price} was sent to ${momoNumber}.\n\n📍 Meetup Location: ${selectedMeetupSpot}\nReference: ${response.data.reference}\n\nFunds remain safely held in Campus Escrow until you confirm service delivery in your Profile screen!`,
-        [{ text: 'Great, Understood!' }]
+        `A payment prompt of GH₵ ${hustle.price} was sent to ${momoNumber}.\n\n📍 Meetup Location: ${selectedMeetupSpot}\nReference: ${response.data.reference}\n\nFunds remain safely held in Campus Escrow until you confirm service delivery in your Profile screen!`
       );
     } catch (error: any) {
       setIsProcessing(false);
-      Alert.alert('Payment Error', error.message || 'Unable to connect to MoMo gateway.');
+      showAlert('Payment Error', error.message || 'Unable to connect to MoMo gateway.');
     }
   };
 
   const handleShare = async () => {
     try {
-      await Share.share({
+      const shareData = {
         message: `Check out this KNUST student hustle: "${hustle.title}" by ${hustle.sellerName} for GH₵ ${hustle.price} on CampusHustle!`,
-      });
+      };
+      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(shareData.message);
+        showAlert('Link Copied!', 'Hustle details copied to your clipboard!');
+      } else {
+        await Share.share(shareData);
+      }
     } catch (error) {
       // Ignored
     }

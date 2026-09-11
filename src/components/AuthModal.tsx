@@ -9,6 +9,7 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { KNUST_LOCATIONS } from '../data/mockData';
 import { registerStudentApi, loginStudentApi, formatGhanaPhoneNumber } from '../services/api';
@@ -20,9 +21,18 @@ interface AuthModalProps {
   onSuccess: (user: StudentProfile, token: string) => void;
 }
 
+const showAlert = (title: string, message: string) => {
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.alert) {
+    window.alert(`${title}\n\n${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
+};
+
 export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSuccess }) => {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Form States
   const [email, setEmail] = useState('');
@@ -32,9 +42,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
   const [hostelLocation, setHostelLocation] = useState('Ayeduase');
   const [whatsAppNumber, setWhatsAppNumber] = useState('');
 
+  const fillDemoData = () => {
+    setName('Kwame Mensah');
+    setEmail(`student_${Math.floor(Math.random() * 900 + 100)}@st.knust.edu.gh`);
+    setPassword('knust2026');
+    setProgram('Computer Engineering (Level 300)');
+    setHostelLocation('Ayeduase');
+    setWhatsAppNumber('0241234567');
+    setErrorMessage(null);
+  };
+
   const handleLogin = async () => {
+    setErrorMessage(null);
     if (!email.trim() || !password.trim()) {
-      Alert.alert('Missing Fields', 'Please enter your student email and password.');
+      setErrorMessage('Please enter your student email and password.');
       return;
     }
 
@@ -42,59 +63,77 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
     try {
       const res = await loginStudentApi({ email: email.trim(), password });
       setIsLoading(false);
-      Alert.alert('🎉 Welcome Back!', `Logged in as ${res.user.name}`);
+      showAlert('🎉 Welcome Back!', `Logged in as ${res.user.name}`);
       onSuccess(res.user, res.token);
       onClose();
     } catch (error: any) {
       setIsLoading(false);
-      Alert.alert('Login Error', error.message || 'Invalid email or password.');
+      const msg = error?.message || 'Invalid email or password.';
+      setErrorMessage(msg);
+      showAlert('Login Notice', msg);
     }
   };
 
   const handleRegister = async () => {
-    if (!name.trim() || !email.trim() || !password || !program || !whatsAppNumber) {
-      Alert.alert('Missing Fields', 'Please fill in all required registration fields.');
+    setErrorMessage(null);
+
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedProgram = program.trim();
+    const trimmedPhone = whatsAppNumber.trim();
+
+    if (!trimmedName || !trimmedEmail || !password || !trimmedProgram || !trimmedPhone) {
+      setErrorMessage('Please fill in all required fields (*).');
       return;
     }
 
     if (password.length < 6) {
-      Alert.alert('Weak Password', 'Password must be at least 6 characters long.');
+      setErrorMessage('Password must be at least 6 characters long.');
       return;
     }
 
-    if (!email.trim().toLowerCase().endsWith('@st.knust.edu.gh')) {
-      Alert.alert(
-        'Student Email Required',
-        'Registration is restricted strictly to valid KNUST student emails ending in @st.knust.edu.gh.'
+    // Validate university domain
+    const isValidDomain =
+      trimmedEmail.endsWith('@st.knust.edu.gh') ||
+      trimmedEmail.endsWith('@st.ug.edu.gh') ||
+      trimmedEmail.endsWith('@stu.ucc.edu.gh') ||
+      trimmedEmail.includes('.edu.gh') ||
+      trimmedEmail.endsWith('@knust.edu.gh');
+
+    if (!isValidDomain) {
+      setErrorMessage(
+        'Student email required (must end with @st.knust.edu.gh). Tap "Quick Demo Fill" below to auto-fill a valid KNUST account.'
       );
       return;
     }
 
-    const sanitizedWhatsApp = formatGhanaPhoneNumber(whatsAppNumber.trim());
-    if (!sanitizedWhatsApp || sanitizedWhatsApp.length < 10) {
-      Alert.alert('Invalid Contact', 'Please enter a valid Ghana phone number (e.g. 0241234567).');
+    const sanitizedWhatsApp = formatGhanaPhoneNumber(trimmedPhone);
+    if (!sanitizedWhatsApp || sanitizedWhatsApp.length < 9) {
+      setErrorMessage('Please enter a valid Ghana phone number (e.g. 0241234567).');
       return;
     }
 
     setIsLoading(true);
     try {
       const res = await registerStudentApi({
-        name: name.trim(),
-        email: email.trim(),
+        name: trimmedName,
+        email: trimmedEmail,
         password,
-        program: program.trim(),
+        program: trimmedProgram,
         hostelLocation,
         whatsAppNumber: sanitizedWhatsApp,
         campus: 'knust',
       });
 
       setIsLoading(false);
-      Alert.alert('🎓 Account Created!', 'Your KNUST student account is live!');
+      showAlert('🎓 Account Created!', `Welcome to CampusHustle, ${res.user.name}!`);
       onSuccess(res.user, res.token);
       onClose();
     } catch (error: any) {
       setIsLoading(false);
-      Alert.alert('Registration Error', error.message || 'Unable to register account.');
+      const msg = error?.message || 'Unable to register account. Please try again.';
+      setErrorMessage(msg);
+      showAlert('Registration Notice', msg);
     }
   };
 
@@ -116,7 +155,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
           <View style={styles.tabContainer}>
             <TouchableOpacity
               style={[styles.tab, mode === 'login' && styles.activeTab]}
-              onPress={() => setMode('login')}
+              onPress={() => {
+                setMode('login');
+                setErrorMessage(null);
+              }}
             >
               <Text style={[styles.tabText, mode === 'login' && styles.activeTabText]}>
                 Log In
@@ -124,13 +166,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.tab, mode === 'register' && styles.activeTab]}
-              onPress={() => setMode('register')}
+              onPress={() => {
+                setMode('register');
+                setErrorMessage(null);
+              }}
             >
               <Text style={[styles.tabText, mode === 'register' && styles.activeTabText]}>
                 Student Sign Up
               </Text>
             </TouchableOpacity>
           </View>
+
+          {/* Inline Error Notice Banner */}
+          {errorMessage ? (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorBannerText}>⚠️ {errorMessage}</Text>
+            </View>
+          ) : null}
 
           <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
             {mode === 'login' ? (
@@ -147,7 +199,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
                     keyboardType="email-address"
                     autoCapitalize="none"
                     value={email}
-                    onChangeText={setEmail}
+                    onChangeText={(val) => {
+                      setEmail(val);
+                      setErrorMessage(null);
+                    }}
                   />
                 </View>
 
@@ -158,7 +213,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
                     placeholder="••••••••"
                     secureTextEntry
                     value={password}
-                    onChangeText={setPassword}
+                    onChangeText={(val) => {
+                      setPassword(val);
+                      setErrorMessage(null);
+                    }}
                   />
                 </View>
 
@@ -173,12 +231,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
                     <Text style={styles.submitBtnText}>🔑 Log In</Text>
                   )}
                 </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.demoFillBtn}
+                  onPress={() => {
+                    setEmail('kmensah@st.knust.edu.gh');
+                    setPassword('secret123');
+                    setErrorMessage(null);
+                  }}
+                >
+                  <Text style={styles.demoFillBtnText}>💡 Demo Fill Login Credentials</Text>
+                </TouchableOpacity>
               </View>
             ) : (
               <View>
-                <Text style={styles.subtext}>
-                  Create your seller profile using your valid @st.knust.edu.gh student email.
-                </Text>
+                <View style={styles.registerSubHeader}>
+                  <Text style={styles.subtext}>
+                    Create your seller profile with your valid @st.knust.edu.gh email.
+                  </Text>
+                  <TouchableOpacity style={styles.quickFillTag} onPress={fillDemoData}>
+                    <Text style={styles.quickFillTagText}>⚡ Quick Demo Fill</Text>
+                  </TouchableOpacity>
+                </View>
 
                 <View style={styles.inputGroup}>
                   <Text style={styles.label}>Full Name *</Text>
@@ -186,7 +260,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
                     style={styles.input}
                     placeholder="e.g. Kwame Mensah"
                     value={name}
-                    onChangeText={setName}
+                    onChangeText={(val) => {
+                      setName(val);
+                      setErrorMessage(null);
+                    }}
                   />
                 </View>
 
@@ -198,18 +275,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
                     keyboardType="email-address"
                     autoCapitalize="none"
                     value={email}
-                    onChangeText={setEmail}
+                    onChangeText={(val) => {
+                      setEmail(val);
+                      setErrorMessage(null);
+                    }}
                   />
                 </View>
 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Password *</Text>
+                  <Text style={styles.label}>Password (min 6 chars) *</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="Create a strong password"
+                    placeholder="Create a password"
                     secureTextEntry
                     value={password}
-                    onChangeText={setPassword}
+                    onChangeText={(val) => {
+                      setPassword(val);
+                      setErrorMessage(null);
+                    }}
                   />
                 </View>
 
@@ -219,12 +302,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
                     style={styles.input}
                     placeholder="e.g. Computer Engineering (Level 300)"
                     value={program}
-                    onChangeText={setProgram}
+                    onChangeText={(val) => {
+                      setProgram(val);
+                      setErrorMessage(null);
+                    }}
                   />
                 </View>
 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Hostel / Location *</Text>
+                  <Text style={styles.label}>Hostel / Campus Location *</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
                     {KNUST_LOCATIONS.filter((l) => l !== 'All Locations').map((loc) => (
                       <TouchableOpacity
@@ -244,10 +330,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
                   <Text style={styles.label}>WhatsApp Number *</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="e.g. 233551234567"
+                    placeholder="e.g. 0241234567 or 233551234567"
                     keyboardType="phone-pad"
                     value={whatsAppNumber}
-                    onChangeText={setWhatsAppNumber}
+                    onChangeText={(val) => {
+                      setWhatsAppNumber(val);
+                      setErrorMessage(null);
+                    }}
                   />
                 </View>
 
@@ -274,7 +363,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
@@ -283,7 +372,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
     width: '100%',
-    maxHeight: '85%',
+    maxWidth: 480,
+    maxHeight: '90%',
     padding: 20,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
@@ -306,7 +396,7 @@ const styles = StyleSheet.create({
     color: '#059669',
   },
   closeBtn: {
-    padding: 4,
+    padding: 6,
   },
   closeText: {
     fontSize: 18,
@@ -318,7 +408,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
     borderRadius: 12,
     padding: 4,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   tab: {
     flex: 1,
@@ -337,23 +427,58 @@ const styles = StyleSheet.create({
   activeTabText: {
     color: '#FFFFFF',
   },
+  errorBanner: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+  errorBannerText: {
+    color: '#B91C1C',
+    fontSize: 12,
+    fontWeight: '600',
+    lineHeight: 17,
+  },
+  registerSubHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  quickFillTag: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  quickFillTagText: {
+    color: '#059669',
+    fontSize: 11,
+    fontWeight: '700',
+  },
   subtext: {
     fontSize: 12,
     color: '#64748B',
-    marginBottom: 16,
     lineHeight: 18,
+    flex: 1,
+    paddingRight: 8,
   },
   formScroll: {
-    maxHeight: 400,
+    maxHeight: 440,
   },
   inputGroup: {
-    marginBottom: 14,
+    marginBottom: 12,
   },
   label: {
     fontSize: 12,
     fontWeight: '700',
     color: '#334155',
-    marginBottom: 6,
+    marginBottom: 5,
   },
   input: {
     borderWidth: 1,
@@ -401,5 +526,14 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '800',
+  },
+  demoFillBtn: {
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  demoFillBtnText: {
+    color: '#059669',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

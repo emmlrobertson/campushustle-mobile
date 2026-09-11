@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,14 +10,30 @@ import {
   Alert,
   StatusBar,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useHustleContext } from '../context/HustleContext';
-import { fetchPaymentHistoryApi, releaseEscrowPaymentApi } from '../services/api';
-import { EscrowTransaction } from '../types';
+import {
+  fetchPaymentHistoryApi,
+  releaseEscrowPaymentApi,
+  fetchMyHustlesApi,
+} from '../services/api';
+import { EscrowTransaction, Hustle } from '../types';
 
 interface ProfileScreenProps {
   navigation: any;
 }
+
+const showAlert = (title: string, message: string, onOk?: () => void) => {
+  if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined' && window.alert) {
+      window.alert(`${title}\n\n${message}`);
+    }
+    if (onOk) onOk();
+  } else {
+    Alert.alert(title, message, onOk ? [{ text: 'OK', onPress: onOk }] : undefined);
+  }
+};
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const { hustles, favorites, deleteHustle, user, token, logoutUser, setAuthModalVisible } =
@@ -26,8 +42,26 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const [orders, setOrders] = useState<EscrowTransaction[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [releasingRef, setReleasingRef] = useState<string | null>(null);
+  const [remoteListings, setRemoteListings] = useState<Hustle[]>([]);
 
-  const myHustles = hustles.filter((h) => h.isMyListing);
+  useEffect(() => {
+    if (!token) return;
+    fetchMyHustlesApi(token)
+      .then((data) => {
+        if (data && data.length > 0) {
+          setRemoteListings(data);
+        }
+      })
+      .catch(() => {});
+  }, [token]);
+
+  const myHustles = useMemo(() => {
+    const local = hustles.filter((h) => h.isMyListing || (user && h.sellerId === user.id));
+    const merged = new Map<string, Hustle>();
+    remoteListings.forEach((h) => merged.set(h.id, h));
+    local.forEach((h) => merged.set(h.id, h));
+    return Array.from(merged.values());
+  }, [hustles, remoteListings, user]);
 
   useEffect(() => {
     if (!token) return;
@@ -40,45 +74,90 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
       .finally(() => setLoadingOrders(false));
   }, [token]);
 
+  const executeRelease = async (order: EscrowTransaction) => {
+    if (!token) return;
+    setReleasingRef(order.reference);
+    try {
+      await releaseEscrowPaymentApi(order.reference, token);
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.reference === order.reference ? { ...o, escrow_status: 'released' } : o
+        )
+      );
+      showAlert('🎉 Escrow Released', `GH₵ ${order.amount} has been paid out to ${order.seller_name}!`);
+    } catch (err: any) {
+      showAlert('Error', err.message || 'Could not release escrow.');
+    } finally {
+      setReleasingRef(null);
+    }
+  };
+
   const handleReleaseEscrow = (order: EscrowTransaction) => {
-    Alert.alert(
-      'Confirm Service Received',
-      `Are you sure you want to release GH₵ ${order.amount} to ${order.seller_name}? Only release once you are satisfied with the delivered hustle.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Release Escrow',
-          onPress: async () => {
-            if (!token) return;
-            setReleasingRef(order.reference);
-            try {
-              await releaseEscrowPaymentApi(order.reference, token);
-              setOrders((prev) =>
-                prev.map((o) =>
-                  o.reference === order.reference ? { ...o, escrow_status: 'released' } : o
-                )
-              );
-              Alert.alert('🎉 Escrow Released', `GH₵ ${order.amount} has been paid out to ${order.seller_name}!`);
-            } catch (err: any) {
-              Alert.alert('Error', err.message || 'Could not release escrow.');
-            } finally {
-              setReleasingRef(null);
-            }
+    const confirmMsg = `Are you sure you want to release GH₵ ${order.amount} to ${order.seller_name}? Only release once you are satisfied with the delivered hustle.`;
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(confirmMsg);
+      if (confirmed) {
+        executeRelease(order);
+      }
+    } else {
+      Alert.alert(
+        'Confirm Service Received',
+        confirmMsg,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Release Escrow',
+            onPress: () => executeRelease(order),
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
 
   const handleDelete = (id: string, title: string) => {
-    Alert.alert('Delete Hustle', `Are you sure you want to delete "${title}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => deleteHustle(id),
-      },
-    ]);
+    const msg = `Are you sure you want to delete "${title}"?`;
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(msg);
+      if (confirmed) {
+        deleteHustle(id);
+        showAlert('Deleted', `"${title}" has been removed from your listings.`);
+      }
+    } else {
+      Alert.alert('Delete Hustle', msg, [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            deleteHustle(id);
+            showAlert('Deleted', `"${title}" has been removed from your listings.`);
+          },
+        },
+      ]);
+    }
+  };
+
+  const handleLogout = () => {
+    const msg = 'Are you sure you want to log out of your student account?';
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(msg);
+      if (confirmed) {
+        logoutUser();
+        showAlert('Logged Out', 'You have been logged out.');
+      }
+    } else {
+      Alert.alert('Log Out', msg, [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Log Out',
+          style: 'destructive',
+          onPress: () => {
+            logoutUser();
+            showAlert('Logged Out', 'You have been logged out.');
+          },
+        },
+      ]);
+    }
   };
 
   if (!user) {
@@ -109,7 +188,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
       <StatusBar barStyle="light-content" backgroundColor="#059669" />
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Student Profile</Text>
-        <TouchableOpacity style={styles.logoutBtn} onPress={logoutUser}>
+        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
           <Text style={styles.logoutText}>Log Out</Text>
         </TouchableOpacity>
       </View>

@@ -10,6 +10,8 @@ import {
   Alert,
   StatusBar,
   Image,
+  Platform,
+  ActivityIndicator,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useHustleContext } from '../context/HustleContext';
@@ -20,6 +22,17 @@ import { formatGhanaPhoneNumber } from '../services/api';
 interface PostHustleScreenProps {
   navigation: any;
 }
+
+const showAlert = (title: string, message: string, onOk?: () => void) => {
+  if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined' && window.alert) {
+      window.alert(`${title}\n\n${message}`);
+    }
+    if (onOk) onOk();
+  } else {
+    Alert.alert(title, message, onOk ? [{ text: 'OK', onPress: onOk }] : undefined);
+  }
+};
 
 export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }) => {
   const { addHustle, user, setAuthModalVisible } = useHustleContext();
@@ -37,9 +50,25 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
   const [description, setDescription] = useState('');
   const [tagsInput, setTagsInput] = useState('');
   const [customImageUri, setCustomImageUri] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState(
     'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=600&q=80'
   );
+
+  const fillDemoHustle = () => {
+    setTitle('Dorm iPhone Screen & Battery Repairs');
+    setCategory('tech_repair');
+    setPrice('150');
+    setPriceType('starting_at');
+    setHostelLocation(user?.hostelLocation || 'Ayeduase Central');
+    setDeliveryMode('to_client');
+    setDescription(
+      'Fast 30-minute iPhone screen replacements and original battery repairs right in your hostel room. Guaranteed genuine parts and testing before payment!'
+    );
+    setTagsInput('iPhone, Screen, Battery, Tech, Repairs');
+    setErrorMessage(null);
+  };
 
   const deliveryOptions: { id: DeliveryMode; label: string; icon: string; desc: string }[] = [
     { id: 'to_client', label: 'I visit your hostel', icon: '🏠', desc: 'Travel to client room/hostel' },
@@ -63,7 +92,7 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
         setImageUrl(pickedUri);
       }
     } catch (err) {
-      Alert.alert('Image Error', 'Unable to load photo from gallery.');
+      showAlert('Image Error', 'Unable to load photo from gallery.');
     }
   };
 
@@ -107,22 +136,24 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
     );
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    setErrorMessage(null);
+
     if (!title.trim()) {
-      Alert.alert('Missing Title', 'Please enter a title for your side-hustle.');
+      setErrorMessage('Please enter a title for your side-hustle.');
       return;
     }
     if (!price.trim() || isNaN(Number(price))) {
-      Alert.alert('Invalid Price', 'Please enter a valid price in GH₵.');
+      setErrorMessage('Please enter a valid price in GH₵.');
       return;
     }
     const sanitizedWhatsApp = formatGhanaPhoneNumber(whatsAppNumber.trim());
-    if (!sanitizedWhatsApp || sanitizedWhatsApp.length < 10) {
-      Alert.alert('Invalid Contact', 'Please enter a valid WhatsApp phone number (e.g. 0241234567).');
+    if (!sanitizedWhatsApp || sanitizedWhatsApp.length < 9) {
+      setErrorMessage('Please enter a valid WhatsApp phone number (e.g. 0241234567).');
       return;
     }
     if (!description.trim()) {
-      Alert.alert('Missing Description', 'Please add a brief description of what you offer.');
+      setErrorMessage('Please add a brief description of what you offer.');
       return;
     }
 
@@ -135,38 +166,57 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
       tags.push('KNUST', category);
     }
 
-    addHustle({
-      title,
-      category,
-      price: Number(price),
-      priceType,
-      hostelLocation,
-      sellerId: user.id,
-      sellerName,
-      sellerProgram,
-      campus: 'knust',
-      whatsAppNumber: sanitizedWhatsApp,
-      description,
-      tags,
-      imageUrl,
-      deliveryMode,
-      status,
-    });
+    setIsSubmitting(true);
 
-    Alert.alert('🎉 Success!', 'Your side-hustle is now live on CampusHustle KNUST!', [
-      {
-        text: 'View Marketplace',
-        onPress: () => navigation.navigate('Home'),
-      },
-    ]);
+    try {
+      await addHustle({
+        title: title.trim(),
+        category,
+        price: Number(price),
+        priceType,
+        hostelLocation,
+        sellerId: user.id,
+        sellerName,
+        sellerProgram,
+        campus: 'knust',
+        whatsAppNumber: sanitizedWhatsApp,
+        description: description.trim(),
+        tags,
+        imageUrl,
+        deliveryMode,
+        status,
+      });
+
+      setIsSubmitting(false);
+
+      // Clear form
+      setTitle('');
+      setPrice('');
+      setDescription('');
+      setTagsInput('');
+
+      showAlert('🎉 Success!', 'Your side-hustle is now live on CampusHustle KNUST!', () => {
+        navigation.navigate('Home');
+      });
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setErrorMessage(err?.message || 'Failed to publish hustle. Please try again.');
+    }
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#059669" />
       <View style={styles.topHeader}>
-        <Text style={styles.headerTitle}>Post a Side-Hustle</Text>
-        <Text style={styles.headerSubtitle}>Publishing as {user.name} ({user.email})</Text>
+        <View style={styles.headerRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.headerTitle}>Post a Side-Hustle</Text>
+            <Text style={styles.headerSubtitle}>Publishing as {user.name} ({user.email})</Text>
+          </View>
+          <TouchableOpacity style={styles.demoFillBtn} onPress={fillDemoHustle} activeOpacity={0.8}>
+            <Text style={styles.demoFillBtnText}>⚡ Demo Fill</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.formContent}>
@@ -418,9 +468,25 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
           />
         </View>
 
+        {/* Error Notice Banner */}
+        {errorMessage ? (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorBannerText}>⚠️ {errorMessage}</Text>
+          </View>
+        ) : null}
+
         {/* Submit Button */}
-        <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit} activeOpacity={0.85}>
-          <Text style={styles.submitBtnText}>🚀 Publish Side-Hustle</Text>
+        <TouchableOpacity
+          style={[styles.submitBtn, isSubmitting && { opacity: 0.7 }]}
+          onPress={handleSubmit}
+          activeOpacity={0.85}
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.submitBtnText}>🚀 Publish Side-Hustle</Text>
+          )}
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -436,6 +502,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#059669',
     padding: 16,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  demoFillBtn: {
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  demoFillBtnText: {
+    color: '#047857',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   headerTitle: {
     fontSize: 22,
     fontWeight: '800',
@@ -445,6 +527,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#D1FAE5',
     marginTop: 2,
+  },
+  errorBanner: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 14,
+  },
+  errorBannerText: {
+    color: '#B91C1C',
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 18,
   },
   formContent: {
     padding: 16,
