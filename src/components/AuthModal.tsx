@@ -136,6 +136,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
       onClose();
     } catch (error: any) {
       setIsLoading(false);
+      if (error.requiresVerification) {
+        setStep('otp_verify');
+        setOtpTargetPhone(error.phoneNumber || whatsAppNumber);
+        setCountdown(60);
+        showAlert(
+          'Phone Verification Required',
+          'Please enter the 6-digit verification code sent to your phone to complete sign-in.'
+        );
+        return;
+      }
       const msg = error?.message || 'Invalid email or password.';
       setErrorMessage(msg);
       showAlert('Login Notice', msg);
@@ -163,8 +173,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
       });
 
       setIsLoading(false);
-      setOtpTargetPhone(res.phone || cleanPhone || 'your phone');
-      setDevOtp(res.devOtp || null);
+      setOtpTargetPhone(res.data?.phoneMasked || cleanPhone || 'your phone');
+      setDevOtp(res.data?.devOtp || null);
       setStep('otp_verify');
       setCountdown(60);
       setOtpCode('');
@@ -189,8 +199,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
       return;
     }
 
-    if (password.length < 6) {
-      setErrorMessage('Password must be at least 6 characters long.');
+    if (password.length < 8) {
+      setErrorMessage('Password must be at least 8 characters long for account security.');
       return;
     }
 
@@ -222,23 +232,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
 
     setIsLoading(true);
     try {
-      const res = await sendSmsOtpApi({
+      const res = await registerStudentApi({
+        name: trimmedName,
         email: trimmedEmail,
+        password,
+        program: trimmedProgram,
+        hostelLocation,
         whatsAppNumber: sanitizedWhatsApp,
-        purpose: 'register',
         campus: selectedCampus,
       });
 
       setIsLoading(false);
-      setOtpTargetPhone(res.phone || sanitizedWhatsApp);
-      setDevOtp(res.devOtp || null);
+      setOtpTargetPhone(res.data?.phoneMasked || sanitizedWhatsApp);
+      setDevOtp(res.data?.devOtp || null);
       setStep('otp_verify');
       setCountdown(60);
       setOtpCode('');
-      showAlert('📱 Security Code Dispatched', `A 6-digit verification code was sent via SMS to ${res.phone || sanitizedWhatsApp}`);
+      showAlert(
+        '📱 Security Code Dispatched',
+        `A 6-digit verification code was sent via SMS to ${res.data?.phoneMasked || sanitizedWhatsApp}.`
+      );
     } catch (error: any) {
       setIsLoading(false);
-      const msg = error?.message || 'Unable to dispatch verification SMS.';
+      const msg = error?.message || 'Unable to register account. Please check details.';
       setErrorMessage(msg);
       showAlert('Notice', msg);
     }
@@ -256,14 +272,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
     try {
       const res = await verifySmsOtpApi({
         email: email.trim().toLowerCase(),
-        phone: otpTargetPhone,
+        phone: whatsAppNumber.trim(),
         otp: otpCode.trim(),
         purpose: mode,
-        name: name.trim(),
-        password,
-        program: program.trim(),
-        hostelLocation,
-        campus: selectedCampus,
       });
 
       setIsLoading(false);
@@ -272,7 +283,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
       onClose();
     } catch (err: any) {
       setIsLoading(false);
-      setErrorMessage(err.message || 'Invalid or expired SMS code. Please try again.');
+      setErrorMessage(err.message || 'Invalid or expired verification code.');
     }
   };
 

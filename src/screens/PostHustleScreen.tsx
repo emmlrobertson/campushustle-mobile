@@ -17,7 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useHustleContext } from '../context/HustleContext';
 import { CATEGORIES, CAMPUS_LOCATIONS, CAMPUS_METADATA } from '../data/mockData';
 import { CategoryId, PriceType, DeliveryMode } from '../types';
-import { formatGhanaPhoneNumber } from '../services/api';
+import { formatGhanaPhoneNumber, uploadHustleImageApi } from '../services/api';
 
 interface PostHustleScreenProps {
   navigation: any;
@@ -187,6 +187,26 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
     setIsSubmitting(true);
 
     try {
+      let finalImageUrl = imageUrl;
+
+      // If student picked a local custom image from device gallery, upload it securely first
+      if (
+        customImageUri &&
+        (customImageUri.startsWith('file:') ||
+          customImageUri.startsWith('blob:') ||
+          customImageUri.startsWith('data:') ||
+          customImageUri.startsWith('content:'))
+      ) {
+        try {
+          const uploadRes = await uploadHustleImageApi(customImageUri, (user as any)?.token || '');
+          if (uploadRes?.imageUrl) {
+            finalImageUrl = uploadRes.imageUrl;
+          }
+        } catch (uploadErr) {
+          console.warn('Image upload failed, falling back to default:', uploadErr);
+        }
+      }
+
       await addHustle({
         title: title.trim(),
         category,
@@ -200,7 +220,7 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
         whatsAppNumber: sanitizedWhatsApp,
         description: description.trim(),
         tags,
-        imageUrl,
+        imageUrl: finalImageUrl,
         deliveryMode,
         status,
       });

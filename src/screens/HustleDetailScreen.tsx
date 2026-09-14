@@ -284,15 +284,25 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
       return;
     }
 
+    if (!token || !user) {
+      showAlert('Sign In Required', 'Please sign in to your student account to place orders and check out securely.', () => {
+        setPaymentModalVisible(false);
+        setAuthModalVisible(true);
+      });
+      return;
+    }
+
     setIsProcessing(true);
     try {
-      const response = await initializeMoMoPayment({
-        hustleId: hustle.id,
-        buyerEmail,
-        momoNumber,
-        paymentMethod: 'mtn_momo',
-        meetupSpot: selectedMeetupSpot,
-      });
+      const response = await initializeMoMoPayment(
+        {
+          hustleId: hustle.id,
+          momoNumber,
+          paymentMethod: 'mtn_momo',
+          meetupSpot: selectedMeetupSpot,
+        },
+        token
+      );
 
       setPaymentModalVisible(false);
       setIsProcessing(false);
@@ -528,7 +538,15 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
       <View style={styles.actionBar}>
         <TouchableOpacity
           style={styles.payMomoButton}
-          onPress={() => setPaymentModalVisible(true)}
+          onPress={() => {
+            if (!user || !token) {
+              showAlert('Student Login Required', 'Please sign in to your student account to check out with Campus Escrow protection.', () => {
+                setAuthModalVisible(true);
+              });
+              return;
+            }
+            setPaymentModalVisible(true);
+          }}
           activeOpacity={0.85}
         >
           <Text style={styles.payMomoIcon}>💳</Text>

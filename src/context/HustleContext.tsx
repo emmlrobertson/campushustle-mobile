@@ -1,7 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CampusId, CategoryId, Hustle, StudentProfile } from '../types';
-import { fetchHustlesFromApi, createHustleInApi, deleteHustleInApi } from '../services/api';
+import {
+  fetchHustlesFromApi,
+  createHustleInApi,
+  deleteHustleInApi,
+  fetchCurrentUserApi,
+  logoutStudentApi,
+} from '../services/api';
 import { INITIAL_HUSTLES } from '../data/mockData';
 
 const STORAGE_KEYS = {
@@ -65,8 +71,38 @@ export const HustleProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         ]);
 
         if (savedUser && savedToken) {
-          setUser(JSON.parse(savedUser));
-          setToken(savedToken);
+          try {
+            const parsedUser = JSON.parse(savedUser);
+            setUser(parsedUser);
+            setToken(savedToken);
+
+            // Revalidate token against server (checks tokenVersion & active status)
+            fetchCurrentUserApi(savedToken)
+              .then((res) => {
+                if (res?.user) {
+                  setUser((prev) => ({ ...prev, ...res.user }));
+                  AsyncStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(res.user)).catch(() => {});
+                }
+              })
+              .catch((err: any) => {
+                // If token has been revoked or expired on server (401/403), wipe invalid session
+                if (
+                  err.status === 401 ||
+                  err.status === 403 ||
+                  err.message?.includes('revoked') ||
+                  err.message?.includes('expired') ||
+                  err.message?.includes('Invalid')
+                ) {
+                  console.log('Session expired or revoked on server. Clearing local credentials.');
+                  setUser(null);
+                  setToken(null);
+                  AsyncStorage.removeItem(STORAGE_KEYS.USER).catch(() => {});
+                  AsyncStorage.removeItem(STORAGE_KEYS.TOKEN).catch(() => {});
+                }
+              });
+          } catch (e) {
+            console.warn('Error parsing saved session:', e);
+          }
         }
         if (savedFavs) {
           setFavorites(JSON.parse(savedFavs));
@@ -116,6 +152,9 @@ export const HustleProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   };
 
   const logoutUser = () => {
+    if (token) {
+      logoutStudentApi(token).catch((err) => console.log('Server logout notice:', err));
+    }
     setUser(null);
     setToken(null);
     AsyncStorage.removeItem(STORAGE_KEYS.USER).catch(() => {});

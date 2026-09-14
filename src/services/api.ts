@@ -126,6 +126,44 @@ export async function createHustleInApi(
   }
 }
 
+export async function uploadHustleImageApi(
+  imageUri: string,
+  token: string
+): Promise<{ imageUrl: string; thumbnailUrl: string; publicId: string }> {
+  const formData = new FormData();
+
+  if (Platform.OS === 'web') {
+    const res = await fetch(imageUri);
+    const blob = await res.blob();
+    formData.append('image', blob, 'upload.jpg');
+  } else {
+    const filename = imageUri.split('/').pop() || 'upload.jpg';
+    const match = /\.(\w+)$/.exec(filename);
+    const type = match ? `image/${match[1]}` : `image/jpeg`;
+    formData.append('image', {
+      uri: imageUri,
+      name: filename,
+      type,
+    } as any);
+  }
+
+  const response = await fetch(`${API_BASE_URL}/hustles/upload-image`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to upload image to server');
+  }
+
+  const result = await response.json();
+  return result.data;
+}
+
 export async function deleteHustleInApi(id: string, token?: string): Promise<any> {
   const headers: Record<string, string> = {};
   if (token) {
@@ -166,51 +204,19 @@ export async function registerStudentApi(userData: {
     });
 
     clearTimeout(timeoutId);
-
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok || !data.success) {
-      console.warn('Server registration returned error, activating resilient session:', data.error);
-      // If server returns error (e.g. database schema update in progress or cold-start),
-      // create a local student session so student is not locked out
-      const mockId = `usr_${Date.now()}`;
-      return {
-        success: true,
-        message: '🎓 Account created!',
-        token: `jwt_token_${mockId}`,
-        user: {
-          id: mockId,
-          name: userData.name,
-          email: userData.email,
-          program: userData.program,
-          hostelLocation: userData.hostelLocation,
-          whatsAppNumber: userData.whatsAppNumber,
-          campus: userData.campus || 'knust',
-          createdAt: new Date().toISOString(),
-        },
-      };
+      throw new Error(data.error || 'Registration failed. Please check your information and try again.');
     }
 
     return data;
   } catch (error: any) {
     clearTimeout(timeoutId);
-    console.warn('Backend registration network notice, using local session:', error?.message);
-    const mockId = `usr_${Date.now()}`;
-    return {
-      success: true,
-      message: '🎓 Account created!',
-      token: `jwt_token_${mockId}`,
-      user: {
-        id: mockId,
-        name: userData.name,
-        email: userData.email,
-        program: userData.program,
-        hostelLocation: userData.hostelLocation,
-        whatsAppNumber: userData.whatsAppNumber,
-        campus: userData.campus || 'knust',
-        createdAt: new Date().toISOString(),
-      },
-    };
+    if (error.name === 'AbortError') {
+      throw new Error('Connection timed out. Please check your network and try again.');
+    }
+    throw error;
   }
 }
 
@@ -230,59 +236,25 @@ export async function loginStudentApi(credentials: {
     });
 
     clearTimeout(timeoutId);
-
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok || !data.success) {
-      console.warn('Server login returned error, activating resilient session:', data.error);
-      const mockId = `usr_${Date.now()}`;
-      const nameFromEmail = credentials.email.split('@')[0].replace(/[._-]/g, ' ');
-      const formattedName = nameFromEmail
-        ? nameFromEmail.charAt(0).toUpperCase() + nameFromEmail.slice(1)
-        : 'Student Seller';
-
-      return {
-        success: true,
-        message: '🔑 Logged in successfully!',
-        token: `jwt_token_${mockId}`,
-        user: {
-          id: mockId,
-          name: formattedName,
-          email: credentials.email,
-          program: 'KNUST Student',
-          hostelLocation: 'Ayeduase',
-          whatsAppNumber: '233241234567',
-          campus: 'knust',
-          createdAt: new Date().toISOString(),
-        },
-      };
+      const err = new Error(data.error || 'Invalid student email or password.') as any;
+      if (data.requiresVerification) {
+        err.requiresVerification = true;
+        err.email = data.email;
+        err.phoneNumber = data.phoneNumber;
+      }
+      throw err;
     }
 
     return data;
   } catch (error: any) {
     clearTimeout(timeoutId);
-    console.warn('Backend login network notice, using local session:', error?.message);
-    const mockId = `usr_${Date.now()}`;
-    const nameFromEmail = credentials.email.split('@')[0].replace(/[._-]/g, ' ');
-    const formattedName = nameFromEmail
-      ? nameFromEmail.charAt(0).toUpperCase() + nameFromEmail.slice(1)
-      : 'Student Seller';
-
-    return {
-      success: true,
-      message: '🔑 Logged in successfully!',
-      token: `jwt_token_${mockId}`,
-      user: {
-        id: mockId,
-        name: formattedName,
-        email: credentials.email,
-        program: 'KNUST Student',
-        hostelLocation: 'Ayeduase',
-        whatsAppNumber: '233241234567',
-        campus: 'knust',
-        createdAt: new Date().toISOString(),
-      },
-    };
+    if (error.name === 'AbortError') {
+      throw new Error('Connection timed out. Please check your network connection.');
+    }
+    throw error;
   }
 }
 
@@ -293,32 +265,32 @@ export async function sendSmsOtpApi(params: {
   campus?: string;
 }): Promise<any> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 9000);
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
 
   try {
-    const response = await fetch(`${API_BASE_URL}/auth/send-otp`, {
+    const response = await fetch(`${API_BASE_URL}/auth/resend-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(params),
+      body: JSON.stringify({
+        email: params.email,
+        phone: params.whatsAppNumber,
+        purpose: params.purpose,
+      }),
       signal: controller.signal,
     });
 
     clearTimeout(timeoutId);
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.success) {
-      throw new Error(data.error || 'Failed to dispatch SMS verification code.');
+      throw new Error(data.error || 'Failed to dispatch verification code. Please try again later.');
     }
     return data;
   } catch (err: any) {
     clearTimeout(timeoutId);
-    console.warn('sendSmsOtpApi notice (fallback mode):', err.message);
-    const mockOtp = '849201';
-    return {
-      success: true,
-      message: `A 6-digit security code was sent via SMS to ${params.whatsAppNumber || 'your phone'}`,
-      phone: params.whatsAppNumber,
-      devOtp: mockOtp,
-    };
+    if (err.name === 'AbortError') {
+      throw new Error('Connection timed out while sending SMS. Please try again.');
+    }
+    throw err;
   }
 }
 
@@ -327,20 +299,20 @@ export async function verifySmsOtpApi(params: {
   phone?: string;
   otp: string;
   purpose: 'register' | 'login';
-  name?: string;
-  password?: string;
-  program?: string;
-  hostelLocation?: string;
-  campus?: string;
 }): Promise<any> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 9000);
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
 
   try {
     const response = await fetch(`${API_BASE_URL}/auth/verify-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(params),
+      body: JSON.stringify({
+        email: params.email,
+        phone: params.phone,
+        otp: params.otp,
+        purpose: params.purpose,
+      }),
       signal: controller.signal,
     });
 
@@ -352,74 +324,93 @@ export async function verifySmsOtpApi(params: {
     return data;
   } catch (err: any) {
     clearTimeout(timeoutId);
-    if (params.otp && params.otp.length === 6) {
-      const mockId = `usr_${Date.now()}`;
-      return {
-        success: true,
-        message: '🎉 Phone verified!',
-        token: `jwt_token_${mockId}`,
-        user: {
-          id: mockId,
-          name: params.name || 'Verified Student',
-          email: params.email || 'student@st.knust.edu.gh',
-          program: params.program || 'Level 200',
-          hostelLocation: params.hostelLocation || 'Campus Hostel',
-          whatsAppNumber: params.phone || '0241234567',
-          campus: params.campus || 'knust',
-          createdAt: new Date().toISOString(),
-          phoneVerified: true,
-        },
-      };
+    if (err.name === 'AbortError') {
+      throw new Error('Verification request timed out. Please try again.');
     }
     throw err;
   }
 }
 
-export async function initializeMoMoPayment(paymentData: {
-  hustleId: string;
-  buyerEmail: string;
-  momoNumber: string;
-  paymentMethod?: string;
-  meetupSpot?: string;
-}): Promise<any> {
+export async function fetchCurrentUserApi(token: string): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/auth/me`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.success) {
+    const err = new Error(data.error || 'Unauthorized session.') as any;
+    err.status = response.status;
+    throw err;
+  }
+  return data;
+}
+
+export async function logoutStudentApi(token: string): Promise<any> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/logout`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return await response.json().catch(() => ({}));
+  } catch (e) {
+    return { success: false };
+  }
+}
+
+export async function initializeMoMoPayment(
+  paymentData: {
+    hustleId: string;
+    momoNumber: string;
+    paymentMethod?: string;
+    meetupSpot?: string;
+  },
+  token: string
+): Promise<any> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 8000);
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
 
   try {
     const response = await fetch(`${API_BASE_URL}/payments/initialize`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
       body: JSON.stringify(paymentData),
       signal: controller.signal,
     });
 
     clearTimeout(timeoutId);
 
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      throw new Error(errData.error || 'Failed to initialize Mobile Money payment.');
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || 'Failed to initialize Mobile Money payment.');
     }
 
-    return response.json();
+    return data;
   } catch (error: any) {
     clearTimeout(timeoutId);
-    console.warn('Backend payment notice (activating local escrow simulation):', error?.message);
-    const mockRef = `PAY_KNUST_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-    return {
-      success: true,
-      message: '💳 Mobile Money Payment Initialized with Campus Escrow Protection!',
-      data: {
-        reference: mockRef,
-        amount: 50,
-        currency: 'GHS',
-        momoNumber: paymentData.momoNumber,
-        provider: (paymentData.paymentMethod || 'mtn_momo').toUpperCase(),
-        escrowStatus: 'held',
-        meetupSpot: paymentData.meetupSpot || 'CCB Ground Floor',
-      },
-    };
+    if (error.name === 'AbortError') {
+      throw new Error('Payment initialization timed out. Please check your network connection.');
+    }
+    throw error;
   }
 }
+
+export async function verifyPaymentApi(reference: string): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/payments/verify/${reference}`);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.success) {
+    throw new Error(data.error || 'Payment verification failed.');
+  }
+  return data;
+}
+
+
 
 export async function fetchHustleReviewsApi(hustleId: string): Promise<Review[]> {
   try {
@@ -497,7 +488,7 @@ export async function releaseEscrowPaymentApi(
   token: string
 ): Promise<any> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 8000);
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
 
   try {
     const response = await fetch(`${API_BASE_URL}/payments/release/${reference}`, {
@@ -513,25 +504,16 @@ export async function releaseEscrowPaymentApi(
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.success) {
-      console.warn('Backend release notice, updating locally:', data.error);
-      return {
-        success: true,
-        message: '🛡️ Escrow released! Funds disbursed to seller.',
-        reference,
-        escrowStatus: 'released',
-      };
+      throw new Error(data.error || 'Failed to release escrow funds.');
     }
 
     return data;
   } catch (error: any) {
     clearTimeout(timeoutId);
-    console.warn('Backend release network notice:', error?.message);
-    return {
-      success: true,
-      message: '🛡️ Escrow released! Funds disbursed to seller.',
-      reference,
-      escrowStatus: 'released',
-    };
+    if (error.name === 'AbortError') {
+      throw new Error('Escrow release request timed out. Please check your network connection.');
+    }
+    throw error;
   }
 }
 
