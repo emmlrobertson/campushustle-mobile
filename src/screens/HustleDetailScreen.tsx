@@ -305,9 +305,20 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
       setPaymentModalVisible(false);
       setIsProcessing(false);
 
+      const authUrl = response?.data?.authorizationUrl;
+
       showAlert(
         '🛡️ Campus Escrow Protected!',
-        `A payment prompt of GH₵ ${hustle.price} was sent to ${momoNumber}.\n\n📍 Meetup Location: ${selectedMeetupSpot}\nReference: ${response.data.reference}\n\nFunds remain safely held in Campus Escrow until you confirm service delivery in your Profile screen!`
+        `A payment request for GH₵ ${hustle.price} has been initiated for ${momoNumber}.\n\n📍 Meetup Location: ${selectedMeetupSpot}\nReference: ${response.data.reference}\n\nClick OK to open the secure Paystack checkout portal and complete your payment!`,
+        () => {
+          if (authUrl) {
+            if (Platform.OS === 'web' && typeof window !== 'undefined') {
+              window.location.href = authUrl;
+            } else {
+              Linking.openURL(authUrl);
+            }
+          }
+        }
       );
     } catch (error: any) {
       setIsProcessing(false);
