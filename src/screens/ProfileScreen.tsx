@@ -11,6 +11,7 @@ import {
   StatusBar,
   ActivityIndicator,
   Platform,
+  RefreshControl,
 } from 'react-native';
 import { useHustleContext } from '../context/HustleContext';
 import {
@@ -52,19 +53,39 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 
   const [orders, setOrders] = useState<EscrowTransaction[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [releasingRef, setReleasingRef] = useState<string | null>(null);
   const [remoteListings, setRemoteListings] = useState<Hustle[]>([]);
 
+  const loadProfileData = async () => {
+    if (!token) return;
+    try {
+      const [listings, ordersData] = await Promise.all([
+        fetchMyHustlesApi(token).catch(() => []),
+        fetchPaymentHistoryApi(token).catch(() => []),
+      ]);
+      if (listings && Array.isArray(listings)) {
+        setRemoteListings(listings);
+      }
+      if (ordersData && Array.isArray(ordersData)) {
+        setOrders(ordersData);
+      }
+    } catch (e) {
+      console.warn('Failed to refresh profile data:', e);
+    }
+  };
+
   useEffect(() => {
     if (!token) return;
-    fetchMyHustlesApi(token)
-      .then((data) => {
-        if (data && data.length > 0) {
-          setRemoteListings(data);
-        }
-      })
-      .catch(() => {});
+    setLoadingOrders(true);
+    loadProfileData().finally(() => setLoadingOrders(false));
   }, [token]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadProfileData();
+    setRefreshing(false);
+  };
 
   const myHustles = useMemo(() => {
     const local = hustles.filter((h) => h.isMyListing || (user && h.sellerId === user.id));
@@ -74,28 +95,20 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
     return Array.from(merged.values());
   }, [hustles, remoteListings, user]);
 
-  useEffect(() => {
-    if (!token) return;
-    setLoadingOrders(true);
-    fetchPaymentHistoryApi(token)
-      .then((data) => {
-        if (data) setOrders(data);
-      })
-      .catch(() => {})
-      .finally(() => setLoadingOrders(false));
-  }, [token]);
-
   const executeRelease = async (order: EscrowTransaction) => {
     if (!token) return;
+    const seller = order.seller_name || order.sellerName || 'Seller';
     setReleasingRef(order.reference);
     try {
       await releaseEscrowPaymentApi(order.reference, token);
       setOrders((prev) =>
         prev.map((o) =>
-          o.reference === order.reference ? { ...o, escrow_status: 'released' } : o
+          o.reference === order.reference
+            ? { ...o, escrow_status: 'released', escrowStatus: 'released' }
+            : o
         )
       );
-      showAlert('🎉 Escrow Released', `GH₵ ${order.amount} has been paid out to ${order.seller_name}!`);
+      showAlert('🎉 Escrow Released', `GH₵ ${order.amount} has been paid out to ${seller}!`);
     } catch (err: any) {
       showAlert('Error', err.message || 'Could not release escrow.');
     } finally {
@@ -104,7 +117,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   };
 
   const handleReleaseEscrow = (order: EscrowTransaction) => {
-    const confirmMsg = `Are you sure you want to release GH₵ ${order.amount} to ${order.seller_name}? Only release once you are satisfied with the delivered hustle.`;
+    const seller = order.seller_name || order.sellerName || 'Seller';
+    const confirmMsg = `Are you sure you want to release GH₵ ${order.amount} to ${seller}? Only release once you are satisfied with the delivered hustle.`;
     if (Platform.OS === 'web') {
       const confirmed = window.confirm(confirmMsg);
       if (confirmed) {
@@ -208,6 +222,14 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
         data={myHustles}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#059669']}
+            tintColor="#059669"
+          />
+        }
         ListHeaderComponent={
           <View>
             {/* User Profile Card */}
@@ -337,14 +359,19 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
               </View>
             ) : (
               orders.map((order) => {
-                const isHeld = (order.escrow_status || 'held') === 'held';
+                const sellerName = order.seller_name || order.sellerName || 'Classmate Hustler';
+                const rawStatus = (order.escrow_status || order.escrowStatus || 'held').toLowerCase();
+                const isHeld = rawStatus === 'held';
+                const meetupSpot = order.meetup_spot || order.meetupSpot;
+                const createdAtRaw = order.created_at || order.createdAt;
+                const orderDate = createdAtRaw ? new Date(createdAtRaw).toLocaleDateString() : '';
                 const isReleasing = releasingRef === order.reference;
 
                 return (
                   <View key={order.id || order.reference} style={styles.orderCard}>
                     <View style={styles.orderCardHeader}>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.orderSeller}>Hustler: {order.seller_name}</Text>
+                        <Text style={styles.orderSeller}>Hustler: {sellerName}</Text>
                         <Text style={styles.orderAmount}>GH₵ {order.amount}</Text>
                       </View>
 
@@ -365,19 +392,17 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                       </View>
                     </View>
 
-                    {order.meetup_spot && (
+                    {meetupSpot ? (
                       <View style={styles.orderMeetupRow}>
                         <Text style={styles.orderMeetupText}>
-                          Meetup Spot: <Text style={{ fontWeight: '700' }}>{order.meetup_spot}</Text>
+                          Meetup Spot: <Text style={{ fontWeight: '700' }}>{meetupSpot}</Text>
                         </Text>
                       </View>
-                    )}
+                    ) : null}
 
                     <View style={styles.orderMetaRow}>
                       <Text style={styles.orderRef}>Ref: {order.reference}</Text>
-                      <Text style={styles.orderDate}>
-                        {new Date(order.created_at).toLocaleDateString()}
-                      </Text>
+                      {orderDate ? <Text style={styles.orderDate}>{orderDate}</Text> : null}
                     </View>
 
                     {isHeld && (

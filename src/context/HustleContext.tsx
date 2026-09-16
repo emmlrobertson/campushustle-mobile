@@ -7,8 +7,9 @@ import {
   deleteHustleInApi,
   fetchCurrentUserApi,
   logoutStudentApi,
+  toggleFavoriteApi,
+  fetchFavoritesApi,
 } from '../services/api';
-import { INITIAL_HUSTLES } from '../data/mockData';
 
 const STORAGE_KEYS = {
   USER: '@campushustle_user',
@@ -25,14 +26,15 @@ interface HustleContextType {
   selectedCampus: CampusId;
   filteredHustles: Hustle[];
   isLoading: boolean;
+  error: string | null;
   user: StudentProfile | null;
   token: string | null;
   authModalVisible: boolean;
   setAuthModalVisible: (visible: boolean) => void;
   loginUser: (user: StudentProfile, token: string) => void;
   logoutUser: () => void;
-  addHustle: (newHustleData: Omit<Hustle, 'id' | 'createdAt' | 'rating' | 'reviewCount'>) => void;
-  deleteHustle: (id: string) => void;
+  addHustle: (newHustleData: Omit<Hustle, 'id' | 'createdAt' | 'rating' | 'reviewCount'>) => Promise<any>;
+  deleteHustle: (id: string) => Promise<void>;
   updateHustleStatus: (id: string, status: 'OPEN' | 'BUSY') => void;
   updateHustleRating: (id: string, rating: number, reviewCount: number) => void;
   toggleFavorite: (id: string) => void;
@@ -47,20 +49,21 @@ interface HustleContextType {
 const HustleContext = createContext<HustleContextType | undefined>(undefined);
 
 export const HustleProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [hustles, setHustles] = useState<Hustle[]>(INITIAL_HUSTLES);
+  const [hustles, setHustles] = useState<Hustle[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<CategoryId>('all');
   const [selectedLocation, setSelectedLocation] = useState('All Locations');
   const [selectedCampus, setSelectedCampus] = useState<CampusId>('knust');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Authentication State
   const [user, setUser] = useState<StudentProfile | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [authModalVisible, setAuthModalVisible] = useState(false);
 
-  // 1. Initialize persistent session & favorites from AsyncStorage
+  // 1. Initialize persistent session & favorites from AsyncStorage & server
   useEffect(() => {
     const restoreSession = async () => {
       try {
@@ -69,6 +72,12 @@ export const HustleProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           AsyncStorage.getItem(STORAGE_KEYS.TOKEN),
           AsyncStorage.getItem(STORAGE_KEYS.FAVORITES),
         ]);
+
+        if (savedFavs) {
+          try {
+            setFavorites(JSON.parse(savedFavs));
+          } catch (e) {}
+        }
 
         if (savedUser && savedToken) {
           try {
@@ -100,12 +109,19 @@ export const HustleProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                   AsyncStorage.removeItem(STORAGE_KEYS.TOKEN).catch(() => {});
                 }
               });
+
+            // Sync favorites from PostgreSQL server
+            fetchFavoritesApi(savedToken)
+              .then((res) => {
+                if (res && Array.isArray(res.favoriteIds)) {
+                  setFavorites(res.favoriteIds);
+                  AsyncStorage.setItem(STORAGE_KEYS.FAVORITES, JSON.stringify(res.favoriteIds)).catch(() => {});
+                }
+              })
+              .catch(() => {});
           } catch (e) {
             console.warn('Error parsing saved session:', e);
           }
-        }
-        if (savedFavs) {
-          setFavorites(JSON.parse(savedFavs));
         }
       } catch (err) {
         console.warn('Failed to restore persistent session:', err);
@@ -117,18 +133,14 @@ export const HustleProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   const loadHustles = async () => {
     setIsLoading(true);
+    setError(null);
     try {
       const data = await fetchHustlesFromApi({ campus: selectedCampus });
-      if (data && data.length > 0) {
-        const mergedMap = new Map<string, Hustle>();
-        INITIAL_HUSTLES.forEach((h) => mergedMap.set(h.id, h));
-        data.forEach((h) => mergedMap.set(h.id, h));
-        setHustles(Array.from(mergedMap.values()));
-      } else {
-        setHustles(INITIAL_HUSTLES);
-      }
-    } catch (e) {
-      setHustles(INITIAL_HUSTLES);
+      setHustles(data || []);
+    } catch (e: any) {
+      console.warn('Failed to load hustles from API:', e);
+      setError(e.message || 'Unable to load listings. Please check your network connection.');
+      setHustles([]);
     } finally {
       setIsLoading(false);
     }
@@ -149,6 +161,16 @@ export const HustleProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setToken(newToken);
     AsyncStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(newUser)).catch(() => {});
     AsyncStorage.setItem(STORAGE_KEYS.TOKEN, newToken).catch(() => {});
+
+    // Sync favorites with PostgreSQL on login
+    fetchFavoritesApi(newToken)
+      .then((res) => {
+        if (res && Array.isArray(res.favoriteIds)) {
+          setFavorites(res.favoriteIds);
+          AsyncStorage.setItem(STORAGE_KEYS.FAVORITES, JSON.stringify(res.favoriteIds)).catch(() => {});
+        }
+      })
+      .catch(() => {});
   };
 
   const logoutUser = () => {
@@ -162,26 +184,18 @@ export const HustleProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   };
 
   const addHustle = async (newHustleData: Omit<Hustle, 'id' | 'createdAt' | 'rating' | 'reviewCount'>) => {
-    const localNewHustle: Hustle = {
-      ...newHustleData,
-      id: `hst_${Date.now()}`,
-      sellerId: user?.id,
-      createdAt: new Date().toISOString(),
-      rating: 5.0,
-      reviewCount: 1,
-      isMyListing: true,
-      status: 'OPEN',
-    };
-
-    // Optimistic UI update
-    setHustles((prev) => [localNewHustle, ...prev]);
-
-    // Send to backend API with JWT token for verified seller attribution
+    // Send directly to backend API with JWT token for verified seller attribution
     try {
-      await createHustleInApi(newHustleData, token || undefined);
-      loadHustles();
+      const res = await createHustleInApi(newHustleData, token || undefined);
+      if (res && res.data) {
+        setHustles((prev) => [res.data, ...prev]);
+      } else {
+        await loadHustles();
+      }
+      return res;
     } catch (e) {
-      console.log('Server update notice:', e);
+      console.warn('Failed to create hustle on server:', e);
+      throw e;
     }
   };
 
@@ -196,6 +210,7 @@ export const HustleProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         await deleteHustleInApi(id, token);
       } catch (err) {
         console.warn('Failed to delete on server:', err);
+        loadHustles();
       }
     }
   };
@@ -213,11 +228,18 @@ export const HustleProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   };
 
   const toggleFavorite = (id: string) => {
-    setFavorites((prev) => {
-      const updated = prev.includes(id) ? prev.filter((favId) => favId !== id) : [...prev, id];
-      AsyncStorage.setItem(STORAGE_KEYS.FAVORITES, JSON.stringify(updated)).catch(() => {});
-      return updated;
-    });
+    const isFav = favorites.includes(id);
+    const updated = isFav ? favorites.filter((favId) => favId !== id) : [...favorites, id];
+    setFavorites(updated);
+    AsyncStorage.setItem(STORAGE_KEYS.FAVORITES, JSON.stringify(updated)).catch(() => {});
+
+    if (token) {
+      toggleFavoriteApi(id, token).catch((err) => {
+        console.warn('Failed to toggle favorite on server:', err);
+        // Rollback state if server request fails
+        setFavorites((prev) => (isFav ? [...prev, id] : prev.filter((favId) => favId !== id)));
+      });
+    }
   };
 
   const isFavorite = (id: string) => favorites.includes(id);
@@ -270,6 +292,7 @@ export const HustleProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         selectedCampus,
         filteredHustles,
         isLoading,
+        error,
         user,
         token,
         authModalVisible,

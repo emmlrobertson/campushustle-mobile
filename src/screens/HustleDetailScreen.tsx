@@ -23,7 +23,7 @@ import {
   submitHustleReviewApi,
   toggleHustleStatusApi,
 } from '../services/api';
-import { SAMPLE_REVIEWS, CAMPUS_METADATA } from '../data/mockData';
+import { CAMPUS_METADATA } from '../data/mockData';
 import { Review } from '../types';
 
 const showAlert = (title: string, message: string, onOk?: () => void) => {
@@ -108,17 +108,14 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
 
   useEffect(() => {
     if (!hustle) return;
-    const initialReviews = SAMPLE_REVIEWS[hustle.id] || [];
-    setReviews(initialReviews);
-
-    // Fetch live reviews from backend API
+    // Fetch live reviews from PostgreSQL backend (no mock fallback)
     fetchHustleReviewsApi(hustle.id)
       .then((liveReviews) => {
-        if (liveReviews && liveReviews.length > 0) {
-          setReviews(liveReviews);
-        }
+        setReviews(liveReviews || []);
       })
-      .catch(() => {});
+      .catch(() => {
+        setReviews([]);
+      });
   }, [hustleId]);
 
   if (!hustle) {
@@ -208,41 +205,42 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
       return;
     }
 
-    setIsSubmittingReview(true);
-    const localReview: Review = {
-      id: `rev_${Date.now()}`,
-      hustleId: hustle.id,
-      reviewerId: user?.id,
-      reviewerName: user?.name || 'KNUST Student',
-      reviewerProgram: user?.program || 'Level 200',
-      rating: newRating,
-      comment: newComment.trim(),
-      createdAt: new Date().toISOString(),
-    };
-
-    const updatedReviews = [localReview, ...reviews];
-    setReviews(updatedReviews);
-
-    // Recalculate average rating & count
-    const avg = updatedReviews.reduce((sum, r) => sum + r.rating, 0) / updatedReviews.length;
-    const roundedRating = Math.round(avg * 10) / 10;
-    const newCount = updatedReviews.length;
-    updateHustleRating(hustle.id, roundedRating, newCount);
-
-    if (token) {
-      try {
-        await submitHustleReviewApi(hustle.id, newRating, newComment.trim(), token);
-      } catch (err) {
-        console.warn('Review API error:', err);
-      }
+    if (!token) {
+      showAlert('Student Login Required', 'Please log in with your verified student account to write a review.');
+      return;
     }
 
-    setIsSubmittingReview(false);
-    setReviewModalVisible(false);
-    setNewComment('');
-    setNewRating(5);
+    setIsSubmittingReview(true);
+    try {
+      const res = await submitHustleReviewApi(hustle.id, newRating, newComment.trim(), token);
+      const createdReview: Review = res?.data || {
+        id: `rev_${Date.now()}`,
+        hustleId: hustle.id,
+        reviewerId: user?.id,
+        reviewerName: user?.name || 'KNUST Student',
+        reviewerProgram: user?.program || 'Student',
+        rating: newRating,
+        comment: newComment.trim(),
+        createdAt: new Date().toISOString(),
+        isVerifiedPurchase: true,
+      };
 
-    showAlert('⭐ Thank You!', `Your review has been published for your fellow ${campusInfo.shortName} classmates.`);
+      const updatedReviews = [createdReview, ...reviews];
+      setReviews(updatedReviews);
+
+      const avg = updatedReviews.reduce((sum, r) => sum + r.rating, 0) / updatedReviews.length;
+      const roundedRating = Math.round(avg * 10) / 10;
+      updateHustleRating(hustle.id, roundedRating, updatedReviews.length);
+
+      setReviewModalVisible(false);
+      setNewComment('');
+      setNewRating(5);
+      showAlert('⭐ Thank You!', `Your review has been verified and published for your fellow ${campusInfo.shortName} classmates.`);
+    } catch (err: any) {
+      showAlert('Review Notice', err.message || 'Only students who have purchased and received this service can submit a verified review.');
+    } finally {
+      setIsSubmittingReview(false);
+    }
   };
 
   const handleWhatsAppChat = () => {
@@ -515,7 +513,14 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
                       <Text style={styles.reviewAvatarText}>{rev.reviewerName.charAt(0)}</Text>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.reviewerName}>{rev.reviewerName}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                        <Text style={styles.reviewerName}>{rev.reviewerName}</Text>
+                        {rev.isVerifiedPurchase && (
+                          <View style={styles.verifiedReviewBadge}>
+                            <Text style={styles.verifiedReviewBadgeText}>✓ Verified Purchase</Text>
+                          </View>
+                        )}
+                      </View>
                       <Text style={styles.reviewerProgram}>{rev.reviewerProgram}</Text>
                     </View>
                     <View style={styles.starsRow}>
@@ -1127,6 +1132,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#0F172A',
+  },
+  verifiedReviewBadge: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  verifiedReviewBadgeText: {
+    fontSize: 10,
+    color: '#047857',
+    fontWeight: '700',
   },
   reviewerProgram: {
     fontSize: 11,

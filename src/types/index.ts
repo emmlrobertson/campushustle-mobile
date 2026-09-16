@@ -54,6 +54,8 @@ export interface Review {
   rating: number;
   comment: string;
   createdAt: string;
+  isVerifiedPurchase?: boolean;
+  orderItemId?: string | null;
 }
 
 export interface StudentProfile {
@@ -73,16 +75,26 @@ export type SortOption = 'recommended' | 'price_asc' | 'price_desc' | 'rating_de
 
 export interface EscrowTransaction {
   id: string;
-  hustle_id: string;
-  buyer_email: string;
-  seller_name: string;
+  hustle_id?: string;
+  hustleId?: string;
+  buyer_email?: string;
+  buyerEmail?: string;
+  seller_name?: string;
+  sellerName?: string;
   amount: number;
-  payment_method: string;
-  momo_number: string;
+  payment_method?: string;
+  paymentMethod?: string;
+  momo_number?: string;
+  momoNumber?: string;
   status: string;
   reference: string;
-  created_at: string;
-  escrow_status?: 'held' | 'released' | 'refunded';
+  created_at?: string;
+  createdAt?: string;
+  escrow_status?: 'held' | 'released' | 'refunded' | 'HELD' | 'RELEASED' | 'REFUNDED' | string;
+  escrowStatus?: 'held' | 'released' | 'refunded' | 'HELD' | 'RELEASED' | 'REFUNDED' | string;
   meetup_spot?: string;
+  meetupSpot?: string;
+  hustleTitle?: string;
+  hustle_title?: string;
 }
 

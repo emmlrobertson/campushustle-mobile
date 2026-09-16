@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   SafeAreaView,
   StatusBar,
+  RefreshControl,
 } from 'react-native';
 import { useHustleContext } from '../context/HustleContext';
 import { Header } from '../components/Header';
@@ -29,6 +30,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     selectedLocation,
     selectedCategory,
     selectedCampus,
+    isLoading,
+    error,
+    refreshHustles,
   } = useHustleContext();
 
   const campusInfo = CAMPUS_METADATA[selectedCampus] || CAMPUS_METADATA.knust;
@@ -48,6 +52,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           />
         )}
         contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={isLoading}
+            onRefresh={refreshHustles}
+            colors={['#059669']}
+            tintColor="#059669"
+          />
+        }
         ListHeaderComponent={
           <View style={styles.headerWrapper}>
             {/* Search Bar */}
@@ -141,7 +153,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         }
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            {searchQuery !== '' || selectedCategory !== 'all' || selectedLocation !== 'All Locations' ? (
+            {error ? (
+              <>
+                <Text style={styles.emptyIcon}>⚠️</Text>
+                <Text style={styles.emptyTitle}>Unable to Load Listings</Text>
+                <Text style={styles.emptySubtitle}>{error}</Text>
+                <TouchableOpacity
+                  style={styles.resetButton}
+                  onPress={refreshHustles}
+                >
+                  <Text style={styles.resetButtonText}>🔄 Tap to Retry</Text>
+                </TouchableOpacity>
+              </>
+            ) : searchQuery !== '' || selectedCategory !== 'all' || selectedLocation !== 'All Locations' ? (
               <>
                 <Text style={styles.emptyIcon}>🔍</Text>
                 <Text style={styles.emptyTitle}>No hustles match your search</Text>

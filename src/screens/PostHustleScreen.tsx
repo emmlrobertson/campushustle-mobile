@@ -35,7 +35,7 @@ const showAlert = (title: string, message: string, onOk?: () => void) => {
 };
 
 export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }) => {
-  const { addHustle, user, setAuthModalVisible, selectedCampus } = useHustleContext();
+  const { addHustle, user, token, setAuthModalVisible, selectedCampus } = useHustleContext();
 
   const campusInfo = CAMPUS_METADATA[selectedCampus] || CAMPUS_METADATA.knust;
   const availableLocations = (CAMPUS_LOCATIONS[selectedCampus] || CAMPUS_LOCATIONS.knust).filter(
@@ -198,7 +198,7 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
           customImageUri.startsWith('content:'))
       ) {
         try {
-          const uploadRes = await uploadHustleImageApi(customImageUri, (user as any)?.token || '');
+          const uploadRes = await uploadHustleImageApi(customImageUri, token || '');
           if (uploadRes?.imageUrl) {
             finalImageUrl = uploadRes.imageUrl;
           }

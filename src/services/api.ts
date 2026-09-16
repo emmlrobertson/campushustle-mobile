@@ -2,13 +2,15 @@ import { Platform } from 'react-native';
 import { Hustle, Review, EscrowTransaction } from '../types';
 
 const LOCAL_API_URL = 'http://localhost:5000/api';
-const CLOUD_API_URL = 'https://campushustle-backend-2.onrender.com/api';
+const CLOUD_API_URL = 'https://campushustle-backend-4.onrender.com/api';
 
-// Use local dev server on localhost, cloud URL in production/mobile
+// Use environment variable if configured, else dev server on localhost, cloud URL in production/mobile
+const CONFIG_API_URL = process.env.EXPO_PUBLIC_API_URL;
 export const API_BASE_URL =
-  Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname === 'localhost'
+  CONFIG_API_URL ||
+  (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname === 'localhost'
     ? LOCAL_API_URL
-    : CLOUD_API_URL;
+    : CLOUD_API_URL);
 
 /**
  * Standardizes Ghana phone numbers to international 233 format without spaces or symbols.
@@ -40,7 +42,7 @@ export async function fetchHustlesFromApi(params?: {
   sellerId?: string;
 }): Promise<Hustle[]> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 9000); // 9-second timeout for slow cold starts
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
 
   try {
     const queryParts: string[] = [];
@@ -58,15 +60,17 @@ export async function fetchHustlesFromApi(params?: {
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
+      throw new Error(`Failed to load hustles from server (HTTP ${response.status})`);
     }
 
     const result = await response.json();
     return result.data || [];
   } catch (error: any) {
     clearTimeout(timeoutId);
-    console.warn(`Cloud API connection notice:`, error?.message || error);
-    return [];
+    if (error.name === 'AbortError') {
+      throw new Error('Connection timed out. Please check your internet connection.');
+    }
+    throw error;
   }
 }
 
@@ -92,7 +96,7 @@ export async function createHustleInApi(
   token?: string
 ): Promise<any> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 8000);
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
 
   try {
     const headers: Record<string, string> = {
@@ -112,17 +116,18 @@ export async function createHustleInApi(
 
     clearTimeout(timeoutId);
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.warn('Backend hustle creation note:', errorData.error);
-      return { success: true, localOnly: true };
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || 'Failed to create hustle listing.');
     }
 
-    return response.json();
+    return data;
   } catch (err: any) {
     clearTimeout(timeoutId);
-    console.warn('Cloud API notice (optimistic local hustle saved):', err?.message || err);
-    return { success: true, localOnly: true };
+    if (err.name === 'AbortError') {
+      throw new Error('Listing creation timed out. Please check your network.');
+    }
+    throw err;
   }
 }
 
@@ -515,5 +520,188 @@ export async function releaseEscrowPaymentApi(
     }
     throw error;
   }
+}
+
+// ============================================================================
+// FAVORITES APIS (PostgreSQL Source of Truth)
+// ============================================================================
+export async function toggleFavoriteApi(
+  hustleId: string,
+  token: string
+): Promise<{ success: boolean; isFavorite: boolean }> {
+  const response = await fetch(`${API_BASE_URL}/hustles/${hustleId}/favorite`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.success) {
+    throw new Error(data.error || 'Failed to update favorite status');
+  }
+  return data;
+}
+
+export async function fetchFavoritesApi(
+  token: string
+): Promise<{ favoriteIds: string[]; data: Hustle[] }> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/hustles/my/favorites`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) return { favoriteIds: [], data: [] };
+    const result = await response.json();
+    return {
+      favoriteIds: result.favoriteIds || [],
+      data: result.data || [],
+    };
+  } catch (error) {
+    return { favoriteIds: [], data: [] };
+  }
+}
+
+// ============================================================================
+// ORDERS & SUB-ORDERS APIS
+// ============================================================================
+export async function checkoutOrderApi(
+  orderPayload: {
+    items: Array<{ hustleId: string; quantity: number; meetupLocation?: string; notesToSeller?: string }>;
+    contactPhone?: string;
+    idempotencyKey?: string;
+  },
+  token: string
+): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/orders/checkout`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      ...(orderPayload.idempotencyKey ? { 'idempotency-key': orderPayload.idempotencyKey } : {}),
+    },
+    body: JSON.stringify(orderPayload),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.success) {
+    throw new Error(data.error || 'Checkout failed');
+  }
+  return data;
+}
+
+export async function fetchMyOrdersApi(token: string): Promise<any[]> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/orders/my-orders`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) return [];
+    const data = await response.json();
+    return data.data || [];
+  } catch (error) {
+    return [];
+  }
+}
+
+export async function confirmSubOrderReceiptApi(subOrderId: string, token: string): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/orders/sub-orders/${subOrderId}/confirm-receipt`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.success) {
+    throw new Error(data.error || 'Failed to confirm receipt of order');
+  }
+  return data;
+}
+
+// ============================================================================
+// CART APIS (PostgreSQL Multi-Seller Cart)
+// ============================================================================
+export async function fetchCartApi(token: string): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/cart`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.success) {
+    throw new Error(data.error || 'Failed to load cart');
+  }
+  return data.data;
+}
+
+export async function addToCartApi(hustleId: string, quantity: number, token: string): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/cart/items`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ hustleId, quantity }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.success) {
+    throw new Error(data.error || 'Failed to add item to cart');
+  }
+  return data.data;
+}
+
+export async function updateCartItemApi(itemId: string, quantity: number, token: string): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/cart/items/${itemId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ quantity }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.success) {
+    throw new Error(data.error || 'Failed to update cart quantity');
+  }
+  return data.data;
+}
+
+export async function removeFromCartApi(itemId: string, token: string): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/cart/items/${itemId}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.success) {
+    throw new Error(data.error || 'Failed to remove item from cart');
+  }
+  return data.data;
+}
+
+export async function clearCartApi(token: string): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/cart`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.success) {
+    throw new Error(data.error || 'Failed to clear cart');
+  }
+  return data.data;
 }
 
