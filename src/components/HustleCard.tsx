@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { Hustle } from '../types';
 import { useHustleContext } from '../context/HustleContext';
+import { getHustleImageUrl } from '../utils/imageHelper';
 
 interface HustleCardProps {
   hustle: Hustle;
@@ -11,6 +12,14 @@ interface HustleCardProps {
 export const HustleCard: React.FC<HustleCardProps> = ({ hustle, onPress }) => {
   const { isFavorite, toggleFavorite } = useHustleContext();
   const favorite = isFavorite(hustle.id);
+
+  const [imageUri, setImageUri] = useState<string>(() =>
+    getHustleImageUrl(hustle.imageUrl, hustle.category, hustle.title)
+  );
+
+  useEffect(() => {
+    setImageUri(getHustleImageUrl(hustle.imageUrl, hustle.category, hustle.title));
+  }, [hustle.imageUrl, hustle.category, hustle.title]);
 
   const status = hustle.status || 'OPEN';
 
@@ -42,7 +51,17 @@ export const HustleCard: React.FC<HustleCardProps> = ({ hustle, onPress }) => {
     >
       {/* Image Banner Container */}
       <View style={styles.imageContainer}>
-        <Image source={{ uri: hustle.imageUrl }} style={styles.image} resizeMode="cover" />
+        <Image
+          source={{ uri: imageUri }}
+          style={styles.image}
+          resizeMode="cover"
+          onError={() => {
+            const fallback = getHustleImageUrl(null, hustle.category, hustle.title);
+            if (imageUri !== fallback) {
+              setImageUri(fallback);
+            }
+          }}
+        />
 
         {/* Status Badge Overlaid Top Left */}
         <View style={styles.statusBadge}>

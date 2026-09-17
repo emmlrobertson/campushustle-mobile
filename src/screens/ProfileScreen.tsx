@@ -21,6 +21,7 @@ import {
 } from '../services/api';
 import { EscrowTransaction, Hustle } from '../types';
 import { CAMPUS_METADATA } from '../data/mockData';
+import { getHustleImageUrl } from '../utils/imageHelper';
 
 interface ProfileScreenProps {
   navigation: any;
@@ -35,6 +36,27 @@ const showAlert = (title: string, message: string, onOk?: () => void) => {
   } else {
     Alert.alert(title, message, onOk ? [{ text: 'OK', onPress: onOk }] : undefined);
   }
+};
+
+const MyHustleThumb: React.FC<{ item: Hustle }> = ({ item }) => {
+  const [thumbUri, setThumbUri] = useState(() =>
+    getHustleImageUrl(item.imageUrl, item.category, item.title)
+  );
+
+  useEffect(() => {
+    setThumbUri(getHustleImageUrl(item.imageUrl, item.category, item.title));
+  }, [item.imageUrl, item.category, item.title]);
+
+  return (
+    <Image
+      source={{ uri: thumbUri }}
+      style={styles.myHustleThumb}
+      onError={() => {
+        const fallback = getHustleImageUrl(null, item.category, item.title);
+        if (thumbUri !== fallback) setThumbUri(fallback);
+      }}
+    />
+  );
 };
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
@@ -287,7 +309,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
               onPress={() => navigation.navigate('HustleDetail', { hustleId: item.id })}
               activeOpacity={0.88}
             >
-              <Image source={{ uri: item.imageUrl }} style={styles.myHustleThumb} />
+              <MyHustleThumb item={item} />
               <View style={styles.myHustleInfo}>
                 <View style={styles.myHustleBadgeRow}>
                   <View

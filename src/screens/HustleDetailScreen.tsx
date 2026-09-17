@@ -23,6 +23,7 @@ import {
   submitHustleReviewApi,
   toggleHustleStatusApi,
 } from '../services/api';
+import { getHustleImageUrl } from '../utils/imageHelper';
 import { CAMPUS_METADATA } from '../data/mockData';
 import { Review } from '../types';
 
@@ -131,6 +132,14 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
 
   const isOwner = Boolean(user && hustle.sellerId && hustle.sellerId === user.id);
   const status = hustle.status || 'OPEN';
+
+  const [bannerUri, setBannerUri] = useState<string>(() =>
+    getHustleImageUrl(hustle.imageUrl, hustle.category, hustle.title)
+  );
+
+  useEffect(() => {
+    setBannerUri(getHustleImageUrl(hustle.imageUrl, hustle.category, hustle.title));
+  }, [hustle.imageUrl, hustle.category, hustle.title]);
 
   const deliveryDescriptions: Record<string, { label: string; icon: string; detail: string; tag: string }> = {
     to_client: {
@@ -347,7 +356,16 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Banner Image */}
         <View style={styles.bannerContainer}>
-          <Image source={{ uri: hustle.imageUrl }} style={styles.bannerImage} />
+          <Image
+            source={{ uri: bannerUri }}
+            style={styles.bannerImage}
+            onError={() => {
+              const fallback = getHustleImageUrl(null, hustle.category, hustle.title);
+              if (bannerUri !== fallback) {
+                setBannerUri(fallback);
+              }
+            }}
+          />
 
           <TouchableOpacity
             style={styles.topBackNav}
