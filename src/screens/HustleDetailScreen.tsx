@@ -26,6 +26,7 @@ import {
 import { getHustleImageUrl } from '../utils/imageHelper';
 import { CAMPUS_METADATA } from '../data/mockData';
 import { Review } from '../types';
+import { colors, shadows } from '../theme/colors';
 
 const showAlert = (title: string, message: string, onOk?: () => void) => {
   if (Platform.OS === 'web') {
@@ -614,7 +615,7 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
 
               <Text style={styles.modalTitle}>📱 Secure MoMo Checkout</Text>
               <Text style={styles.modalSubtitle}>
-                Holding <Text style={{ fontWeight: '800', color: '#059669' }}>GH₵ {hustle.price}</Text> for {hustle.sellerName}
+                Holding <Text style={{ fontWeight: '800', color: colors.primary }}>GH₵ {hustle.price}</Text> for {hustle.sellerName}
               </Text>
 
               {/* Safe Meetup Spot Selection */}
@@ -770,16 +771,16 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
   },
   scrollContent: {
-    paddingBottom: 90,
+    paddingBottom: 110,
   },
   bannerContainer: {
-    height: 240,
+    height: 250,
     width: '100%',
     position: 'relative',
-    backgroundColor: '#1E3A8A',
+    backgroundColor: colors.surfaceAlt,
   },
   bannerImage: {
     width: '100%',
@@ -826,31 +827,31 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   hostelBadge: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: colors.busyBg,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
   },
   hostelBadgeText: {
-    color: '#92400E',
+    color: colors.busyText,
     fontSize: 12,
     fontWeight: '700',
   },
   campusTag: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.badgeBlueBg,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
   },
   campusTagText: {
-    color: '#1D4ED8',
+    color: colors.badgeBlueText,
     fontSize: 12,
     fontWeight: '700',
   },
   title: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#111827',
+    color: colors.textPrimary,
     marginBottom: 14,
     lineHeight: 28,
   },
@@ -858,16 +859,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.borderLight,
     marginBottom: 16,
+    ...shadows.card,
   },
   priceLabel: {
     fontSize: 11,
-    color: '#64748B',
+    color: colors.textSecondary,
     fontWeight: '600',
     textTransform: 'uppercase',
   },
@@ -879,17 +881,17 @@ const styles = StyleSheet.create({
   priceCurrency: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#1E3A8A',
+    color: colors.primary,
     marginRight: 2,
   },
   priceValue: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '800',
-    color: '#1E3A8A',
+    color: colors.primary,
   },
   priceType: {
     fontSize: 12,
-    color: '#64748B',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   ratingBox: {
@@ -898,28 +900,29 @@ const styles = StyleSheet.create({
   starBig: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#D97706',
+    color: colors.ratingStar,
   },
   reviewSubText: {
     fontSize: 11,
-    color: '#64748B',
+    color: colors.textMuted,
     marginTop: 2,
   },
   sellerCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
+    borderColor: colors.borderLight,
     marginBottom: 20,
+    ...shadows.card,
   },
   avatarCircle: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#1E3A8A',
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -1148,7 +1151,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#1E3A8A',
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1163,16 +1166,16 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   verifiedReviewBadge: {
-    backgroundColor: '#ECFDF5',
+    backgroundColor: colors.primaryMint,
     borderWidth: 1,
-    borderColor: '#A7F3D0',
+    borderColor: colors.primaryMintBorder,
     borderRadius: 6,
     paddingHorizontal: 5,
     paddingVertical: 1,
   },
   verifiedReviewBadgeText: {
     fontSize: 10,
-    color: '#047857',
+    color: colors.primary,
     fontWeight: '700',
   },
   reviewerProgram: {
@@ -1216,7 +1219,7 @@ const styles = StyleSheet.create({
   },
   submitReviewBtn: {
     flex: 1.5,
-    backgroundColor: '#059669',
+    backgroundColor: colors.primary,
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
@@ -1231,21 +1234,24 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: colors.borderLight,
     padding: 14,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 14,
     flexDirection: 'row',
     gap: 10,
+    ...shadows.cardHover,
   },
   payMomoButton: {
     flex: 1.4,
-    backgroundColor: '#F59E0B',
+    backgroundColor: colors.primary,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 14,
     borderRadius: 14,
+    ...shadows.fab,
   },
   payMomoIcon: {
     fontSize: 18,
@@ -1337,8 +1343,8 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   meetupChipActive: {
-    backgroundColor: '#059669',
-    borderColor: '#059669',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   meetupChipText: {
     fontSize: 12,
@@ -1405,10 +1411,11 @@ const styles = StyleSheet.create({
   },
   modalSubmitBtn: {
     flex: 1.5,
-    backgroundColor: '#F59E0B',
+    backgroundColor: colors.primary,
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
+    ...shadows.fab,
   },
   modalSubmitText: {
     color: '#FFFFFF',
@@ -1426,7 +1433,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   backBtn: {
-    backgroundColor: '#1E3A8A',
+    backgroundColor: colors.primary,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 8,

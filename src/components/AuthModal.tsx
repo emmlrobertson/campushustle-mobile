@@ -21,6 +21,7 @@ import {
 } from '../services/api';
 import { StudentProfile } from '../types';
 import { useHustleContext } from '../context/HustleContext';
+import { colors, shadows } from '../theme/colors';
 
 interface AuthModalProps {
   visible: boolean;
@@ -551,7 +552,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
                     style={styles.demoFillBtn}
                     onPress={() => {
                       setEmail(`student@${campusInfo.emailDomain}`);
-                      setPassword('campus2026');
+                      setPassword('');
                       setWhatsAppNumber('0241234567');
                       setErrorMessage(null);
                     }}
@@ -708,10 +709,10 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '900',
-    color: '#0F172A',
+    color: colors.textPrimary,
   },
   greenText: {
-    color: '#059669',
+    color: colors.primary,
   },
   closeBtn: {
     padding: 6,
@@ -719,11 +720,11 @@ const styles = StyleSheet.create({
   closeText: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#64748B',
+    color: colors.textSecondary,
   },
   tabContainer: {
     flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 12,
     padding: 4,
     marginBottom: 12,
@@ -735,12 +736,12 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   activeTab: {
-    backgroundColor: '#059669',
+    backgroundColor: colors.primary,
   },
   tabText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#64748B',
+    color: colors.textSecondary,
   },
   activeTabText: {
     color: '#FFFFFF',
@@ -756,24 +757,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderColor: colors.border,
+    backgroundColor: colors.background,
   },
   methodOptionActive: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#059669',
+    backgroundColor: colors.primaryMint,
+    borderColor: colors.primary,
   },
   methodOptionText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#64748B',
+    color: colors.textSecondary,
   },
   methodOptionTextActive: {
-    color: '#059669',
+    color: colors.primary,
     fontWeight: '800',
   },
   errorBanner: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: colors.dangerLight,
     borderWidth: 1,
     borderColor: '#FCA5A5',
     borderRadius: 12,
@@ -782,7 +783,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   errorBannerText: {
-    color: '#B91C1C',
+    color: colors.danger,
     fontSize: 12,
     fontWeight: '600',
     lineHeight: 17,
@@ -794,21 +795,21 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   quickFillTag: {
-    backgroundColor: '#ECFDF5',
+    backgroundColor: colors.primaryMint,
     borderWidth: 1,
-    borderColor: '#A7F3D0',
+    borderColor: colors.primaryMintBorder,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 20,
   },
   quickFillTagText: {
-    color: '#059669',
+    color: colors.primary,
     fontSize: 11,
     fontWeight: '700',
   },
   subtext: {
     fontSize: 12,
-    color: '#64748B',
+    color: colors.textSecondary,
     lineHeight: 18,
     marginBottom: 12,
   },
@@ -821,50 +822,51 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#334155',
+    color: colors.textSecondary,
     marginBottom: 5,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: colors.border,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
     fontSize: 14,
-    color: '#0F172A',
-    backgroundColor: '#FAFAFA',
+    color: colors.textPrimary,
+    backgroundColor: colors.surfaceAlt,
   },
   chipScroll: {
     flexDirection: 'row',
   },
   chip: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: colors.border,
     borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 6,
     marginRight: 6,
   },
   selectedChip: {
-    backgroundColor: '#059669',
-    borderColor: '#059669',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   chipText: {
     fontSize: 12,
-    color: '#475569',
+    color: colors.textSecondary,
     fontWeight: '600',
   },
   selectedChipText: {
     color: '#FFFFFF',
   },
   submitBtn: {
-    backgroundColor: '#059669',
+    backgroundColor: colors.primary,
     paddingVertical: 14,
     borderRadius: 14,
     alignItems: 'center',
     marginTop: 10,
     marginBottom: 10,
+    ...shadows.fab,
   },
   submitBtnText: {
     color: '#FFFFFF',
@@ -876,7 +878,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   demoFillBtnText: {
-    color: '#059669',
+    color: colors.primary,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -889,7 +891,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#ECFDF5',
+    backgroundColor: colors.primaryMint,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
@@ -900,16 +902,16 @@ const styles = StyleSheet.create({
   otpTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#0F172A',
+    color: colors.textPrimary,
     marginBottom: 6,
   },
   otpSubtitle: {
     fontSize: 13,
-    color: '#64748B',
+    color: colors.textSecondary,
     marginBottom: 6,
   },
   phoneBadge: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
@@ -918,26 +920,26 @@ const styles = StyleSheet.create({
   phoneBadgeText: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#0F172A',
+    color: colors.textPrimary,
   },
   otpInputGroup: {
     width: '100%',
     marginBottom: 12,
   },
   otpTextInput: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
     borderWidth: 2,
-    borderColor: '#059669',
+    borderColor: colors.primary,
     borderRadius: 16,
     paddingVertical: 14,
     fontSize: 28,
     fontWeight: '900',
-    color: '#0F172A',
+    color: colors.textPrimary,
     textAlign: 'center',
     letterSpacing: 8,
   },
   devOtpBtn: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: colors.busyBg,
     borderWidth: 1,
     borderColor: '#FCD34D',
     paddingHorizontal: 12,
@@ -948,7 +950,7 @@ const styles = StyleSheet.create({
   devOtpText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#92400E',
+    color: colors.busyText,
   },
   resendRow: {
     marginVertical: 10,
@@ -956,12 +958,12 @@ const styles = StyleSheet.create({
   },
   resendTimerText: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: colors.textMuted,
     fontWeight: '600',
   },
   resendActionText: {
     fontSize: 13,
-    color: '#059669',
+    color: colors.primary,
     fontWeight: '700',
   },
   backLink: {
@@ -970,7 +972,7 @@ const styles = StyleSheet.create({
   },
   backLinkText: {
     fontSize: 13,
-    color: '#64748B',
+    color: colors.textSecondary,
     fontWeight: '600',
   },
 });

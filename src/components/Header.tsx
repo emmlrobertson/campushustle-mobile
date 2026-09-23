@@ -7,10 +7,10 @@ import {
   Modal,
   ScrollView,
   Platform,
-  Alert,
 } from 'react-native';
 import { useHustleContext } from '../context/HustleContext';
 import { CampusId } from '../types';
+import { colors, shadows } from '../theme/colors';
 
 export const Header: React.FC = () => {
   const { selectedCampus, setSelectedCampus } = useHustleContext();
@@ -43,18 +43,18 @@ export const Header: React.FC = () => {
   return (
     <View style={styles.container}>
       <View style={styles.brandRow}>
-        <View>
+        <View style={styles.titleArea}>
           <Text style={styles.logoText}>
             Campus<Text style={styles.greenText}>Hustle</Text>
           </Text>
-          <Text style={styles.subtext}>Student Side-Hustles · {campusBadges[selectedCampus]}</Text>
+          <Text style={styles.subtext}>{campusBadges[selectedCampus]} · Student Marketplace</Text>
         </View>
 
         <View style={styles.actionsRow}>
           <TouchableOpacity
             style={styles.bellBtn}
             onPress={() => setBellModalVisible(true)}
-            activeOpacity={0.8}
+            activeOpacity={0.75}
             accessibilityLabel="Notifications"
           >
             <Text style={styles.bellIcon}>🔔</Text>
@@ -69,7 +69,6 @@ export const Header: React.FC = () => {
           >
             <Text style={styles.pinIcon}>📍</Text>
             <Text style={styles.campusText}>{campusBadges[selectedCampus]}</Text>
-            <Text style={styles.downArrow}>▼</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -80,7 +79,7 @@ export const Header: React.FC = () => {
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Your Campus</Text>
-              <TouchableOpacity onPress={() => setCampusModalVisible(false)}>
+              <TouchableOpacity onPress={() => setCampusModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                 <Text style={styles.closeBtn}>✕</Text>
               </TouchableOpacity>
             </View>
@@ -93,6 +92,7 @@ export const Header: React.FC = () => {
                     key={c.id}
                     style={[styles.campusItem, isSelected && styles.campusItemActive]}
                     onPress={() => handleSelectCampus(c.id)}
+                    activeOpacity={0.7}
                   >
                     <Text style={styles.campusItemIcon}>{c.icon}</Text>
                     <View style={{ flex: 1 }}>
@@ -115,8 +115,8 @@ export const Header: React.FC = () => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>🔔 Campus Alerts</Text>
-              <TouchableOpacity onPress={() => setBellModalVisible(false)}>
+              <Text style={styles.modalTitle}>🔔 Campus Alerts & Safety</Text>
+              <TouchableOpacity onPress={() => setBellModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                 <Text style={styles.closeBtn}>✕</Text>
               </TouchableOpacity>
             </View>
@@ -138,6 +138,7 @@ export const Header: React.FC = () => {
             <TouchableOpacity
               style={styles.ackBtn}
               onPress={() => setBellModalVisible(false)}
+              activeOpacity={0.85}
             >
               <Text style={styles.ackBtnText}>Got it!</Text>
             </TouchableOpacity>
@@ -150,190 +151,192 @@ export const Header: React.FC = () => {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 18,
-    paddingTop: 12,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 8 : 12,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: colors.borderLight,
   },
   brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  titleArea: {
+    flex: 1,
+  },
   logoText: {
     fontSize: 22,
     fontWeight: '900',
-    color: '#0F172A',
+    color: colors.textPrimary,
     letterSpacing: -0.5,
   },
   greenText: {
-    color: '#059669', // Emerald Green
+    color: colors.primary, // Deep Forest Green (#0D6535)
   },
   subtext: {
     fontSize: 11,
-    color: '#64748B',
-    fontWeight: '500',
-    marginTop: 1,
+    color: colors.textSecondary,
+    fontWeight: '600',
+    marginTop: 2,
+    letterSpacing: 0.2,
   },
   actionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   bellBtn: {
-    backgroundColor: '#FEF3C7',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    backgroundColor: colors.surfaceAlt,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   bellIcon: {
-    fontSize: 15,
+    fontSize: 16,
   },
   bellDot: {
     position: 'absolute',
-    top: 7,
-    right: 8,
+    top: 8,
+    right: 9,
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: '#EF4444',
+    backgroundColor: colors.danger,
+    borderWidth: 1.5,
+    borderColor: colors.surface,
   },
   campusPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#059669',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 20,
-    shadowColor: '#059669',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 2,
     gap: 4,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
   },
   pinIcon: {
-    fontSize: 11,
+    fontSize: 12,
+    marginRight: 2,
   },
   campusText: {
-    color: '#FFFFFF',
+    color: colors.textWhite,
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
-  downArrow: {
-    color: '#D1FAE5',
-    fontSize: 9,
-  },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
   modalCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    backgroundColor: colors.surface,
+    borderRadius: 24,
     width: '100%',
-    maxWidth: 420,
-    padding: 18,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
+    maxWidth: 400,
+    padding: 20,
+    ...shadows.cardHover,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
-    paddingBottom: 10,
+    marginBottom: 16,
+    paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: colors.borderLight,
   },
   modalTitle: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '800',
-    color: '#0F172A',
+    color: colors.textPrimary,
   },
   closeBtn: {
     fontSize: 16,
-    color: '#64748B',
+    color: colors.textMuted,
     fontWeight: '700',
     padding: 4,
   },
   campusItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 8,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    padding: 14,
+    borderRadius: 16,
+    marginBottom: 10,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1.5,
+    borderColor: colors.border,
   },
   campusItemActive: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#059669',
+    backgroundColor: colors.primaryMint,
+    borderColor: colors.primary,
   },
   campusItemIcon: {
-    fontSize: 20,
-    marginRight: 12,
+    fontSize: 22,
+    marginRight: 14,
   },
   campusItemName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#1E293B',
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.textPrimary,
   },
   campusItemNameActive: {
-    color: '#059669',
+    color: colors.primary,
   },
   campusItemDesc: {
-    fontSize: 11,
-    color: '#64748B',
+    fontSize: 12,
+    color: colors.textSecondary,
     marginTop: 2,
   },
   checkIcon: {
-    color: '#059669',
-    fontSize: 16,
+    color: colors.primary,
+    fontSize: 17,
     fontWeight: '900',
+    marginLeft: 8,
   },
   alertCard: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 10,
+    borderColor: colors.border,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
   },
   alertCardTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.textPrimary,
     marginBottom: 4,
   },
   alertCardBody: {
-    fontSize: 12,
-    color: '#475569',
-    lineHeight: 17,
+    fontSize: 13,
+    color: colors.textSecondary,
+    lineHeight: 18,
   },
   ackBtn: {
-    backgroundColor: '#059669',
-    borderRadius: 12,
-    paddingVertical: 12,
+    backgroundColor: colors.primary,
+    borderRadius: 14,
+    paddingVertical: 13,
     alignItems: 'center',
     marginTop: 6,
   },
   ackBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
+    color: colors.textWhite,
+    fontSize: 14,
+    fontWeight: '800',
   },
 });

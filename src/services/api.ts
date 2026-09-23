@@ -705,3 +705,55 @@ export async function clearCartApi(token: string): Promise<any> {
   return data.data;
 }
 
+// ----------------------------------------------------------------------------
+// SELLER PAYOUT ACCOUNT API
+// ----------------------------------------------------------------------------
+
+export interface PayoutAccountData {
+  hasConfiguredPayout: boolean;
+  isPayoutVerified: boolean;
+  payoutMomoNetwork: 'MTN_MOMO' | 'TELECEL_CASH' | 'AIRTEL_TIGO_MONEY' | null;
+  maskedPhoneNumber: string | null;
+  verifiedAccountName: string | null;
+  businessName?: string | null;
+}
+
+export async function fetchPayoutAccountApi(token: string): Promise<PayoutAccountData> {
+  const response = await fetch(`${API_BASE_URL}/seller/payout-account`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.success) {
+    throw new Error(data.error || 'Failed to fetch payout account settings');
+  }
+  return data.data;
+}
+
+export async function updatePayoutAccountApi(
+  payload: {
+    network: 'MTN_MOMO' | 'TELECEL_CASH' | 'AIRTEL_TIGO_MONEY';
+    phoneNumber: string;
+    accountName: string;
+  },
+  token: string
+): Promise<PayoutAccountData> {
+  const response = await fetch(`${API_BASE_URL}/seller/payout-account`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.success) {
+    throw new Error(data.error || 'Failed to update payout account');
+  }
+  return data.data;
+}
+
+

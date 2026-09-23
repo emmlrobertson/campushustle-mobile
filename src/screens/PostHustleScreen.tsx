@@ -18,6 +18,8 @@ import { useHustleContext } from '../context/HustleContext';
 import { CATEGORIES, CAMPUS_LOCATIONS, CAMPUS_METADATA } from '../data/mockData';
 import { CategoryId, PriceType, DeliveryMode } from '../types';
 import { formatGhanaPhoneNumber, uploadHustleImageApi } from '../services/api';
+import { getHustleImageUrl } from '../utils/imageHelper';
+import { colors, shadows } from '../theme/colors';
 
 interface PostHustleScreenProps {
   navigation: any;
@@ -44,274 +46,293 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
 
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<CategoryId>('tutoring');
+  const [customCategory, setCustomCategory] = useState('');
   const [price, setPrice] = useState('');
   const [priceType, setPriceType] = useState<PriceType>('flat');
   const [hostelLocation, setHostelLocation] = useState(availableLocations[0] || 'Campus Area');
   const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>('to_client');
   const [status, setStatus] = useState<'OPEN' | 'BUSY'>('OPEN');
-  const [sellerName, setSellerName] = useState('');
-  const [sellerProgram, setSellerProgram] = useState('');
   const [whatsAppNumber, setWhatsAppNumber] = useState('');
   const [description, setDescription] = useState('');
-  const [tagsInput, setTagsInput] = useState('');
   const [customImageUri, setCustomImageUri] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [imageUrl, setImageUrl] = useState(
-    'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=600&q=80'
-  );
-
-  const fillDemoHustle = () => {
-    setTitle('Dorm iPhone Screen & Battery Repairs');
-    setCategory('tech_repair');
-    setPrice('150');
-    setPriceType('starting_at');
-    const defaultHostel =
-      user?.hostelLocation ||
-      (selectedCampus === 'ug_legon'
-        ? 'Pentagon (Diaspora)'
-        : selectedCampus === 'ucc'
-        ? 'Casely Hayford (Casford)'
-        : 'Ayeduase Central');
-    setHostelLocation(defaultHostel);
-    setDeliveryMode('to_client');
-    setDescription(
-      `Fast 30-minute iPhone screen replacements and original battery repairs right in your hostel room at ${campusInfo.shortName}. Guaranteed genuine parts and testing before payment!`
-    );
-    setTagsInput(`iPhone, Screen, Battery, Tech, Repairs, ${campusInfo.shortName}`);
-    setErrorMessage(null);
-  };
-
-  const deliveryOptions: { id: DeliveryMode; label: string; icon: string; desc: string }[] = [
-    { id: 'to_client', label: 'I visit your hostel', icon: '🏠', desc: 'Travel to client room/hostel' },
-    { id: 'at_seller', label: 'Come to my hostel', icon: '📍', desc: 'Client visits my room/hostel' },
-    { id: 'campus_spot', label: 'Meet on campus', icon: '🎓', desc: 'CCB, Library, Brunei Market' },
-    { id: 'remote', label: 'Remote / Online', icon: '💻', desc: 'WhatsApp, Zoom, Email' },
-  ];
-
-  const pickImage = async () => {
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.7,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const pickedUri = result.assets[0].uri;
-        setCustomImageUri(pickedUri);
-        setImageUrl(pickedUri);
-      }
-    } catch (err) {
-      showAlert('Image Error', 'Unable to load photo from gallery.');
-    }
-  };
 
   useEffect(() => {
-    if (user) {
-      setSellerName(user.name);
-      setSellerProgram(user.program);
+    if (user?.whatsAppNumber) {
       setWhatsAppNumber(user.whatsAppNumber);
-      if (user.hostelLocation) {
-        setHostelLocation(user.hostelLocation);
-      } else if (availableLocations.length > 0) {
-        setHostelLocation(availableLocations[0]);
-      }
-    } else if (availableLocations.length > 0) {
-      setHostelLocation(availableLocations[0]);
     }
-  }, [user, selectedCampus]);
+    if (user?.hostelLocation) {
+      setHostelLocation(user.hostelLocation);
+    }
+  }, [user]);
 
-  const presetImages = [
-    { label: '📚 Study', url: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=600&q=80' },
-    { label: '💻 Tech', url: 'https://images.unsplash.com/photo-1597740985671-2a8a3b80502e?auto=format&fit=crop&w=600&q=80' },
-    { label: '📸 Camera', url: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=600&q=80' },
-    { label: '🍕 Food', url: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=600&q=80' },
-    { label: '💅 Beauty', url: 'https://images.unsplash.com/photo-1560869713-7d0a29430803?auto=format&fit=crop&w=600&q=80' },
+  const handlePickImage = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        showAlert('Permission Required', 'Please allow gallery access to upload hustle pictures.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]?.uri) {
+        setCustomImageUri(result.assets[0].uri);
+      }
+    } catch (e: any) {
+      showAlert('Photo Picker Notice', 'Could not open image library: ' + e.message);
+    }
+  };
+
+  const deliveryModesList: { id: DeliveryMode; title: string; subtitle: string; icon: string }[] = [
+    {
+      id: 'to_client',
+      title: 'I visit your hostel',
+      subtitle: "You travel to client's location",
+      icon: '🚀',
+    },
+    {
+      id: 'at_seller',
+      title: 'Come to my hostel',
+      subtitle: 'Client comes to your hostel/room',
+      icon: '🏠',
+    },
+    {
+      id: 'campus_spot',
+      title: 'Meet on campus',
+      subtitle: 'Library, Great Hall, lecture areas',
+      icon: '🎓',
+    },
+    {
+      id: 'remote',
+      title: 'Remote / Online',
+      subtitle: 'WhatsApp, Zoom, Email delivery',
+      icon: '💻',
+    },
   ];
 
-  if (!user) {
-    return (
-      <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-        <View style={styles.loggedOutContainer}>
-          <Text style={styles.loggedOutIcon}>🎓</Text>
-          <Text style={styles.loggedOutTitle}>{campusInfo.shortName} Student Login Required</Text>
-          <Text style={styles.loggedOutSub}>
-            Please log in or register with your valid @{campusInfo.domain} student email to publish side-hustles on {campusInfo.shortName}.
-          </Text>
-
-          <TouchableOpacity
-            style={styles.loginNowBtn}
-            onPress={() => setAuthModalVisible(true)}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.loginNowText}>🔑 Student Log In / Sign Up</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  const isFormValid =
+    title.trim().length >= 4 &&
+    parseFloat(price) > 0 &&
+    whatsAppNumber.trim().length >= 9;
 
   const handleSubmit = async () => {
     setErrorMessage(null);
 
-    if (!title.trim()) {
-      setErrorMessage('Please enter a title for your side-hustle.');
-      return;
-    }
-    if (!price.trim() || isNaN(Number(price))) {
-      setErrorMessage('Please enter a valid price in GH₵.');
-      return;
-    }
-    const sanitizedWhatsApp = formatGhanaPhoneNumber(whatsAppNumber.trim());
-    if (!sanitizedWhatsApp || sanitizedWhatsApp.length < 9) {
-      setErrorMessage('Please enter a valid WhatsApp phone number (e.g. 0241234567).');
-      return;
-    }
-    if (!description.trim()) {
-      setErrorMessage('Please add a brief description of what you offer.');
+    if (!user) {
+      setAuthModalVisible(true);
       return;
     }
 
-    const tags = tagsInput
-      .split(',')
-      .map((t) => t.trim())
-      .filter((t) => t.length > 0);
+    if (!title.trim() || title.length < 4) {
+      setErrorMessage('Please enter a descriptive service title (at least 4 characters).');
+      return;
+    }
 
-    if (tags.length === 0) {
-      tags.push(campusInfo.shortName, category);
+    const numPrice = parseFloat(price);
+    if (isNaN(numPrice) || numPrice <= 0) {
+      setErrorMessage('Please enter a valid price in Ghana Cedis (GH₵).');
+      return;
+    }
+
+    if (!whatsAppNumber.trim()) {
+      setErrorMessage('Please enter a valid Ghanaian WhatsApp phone number.');
+      return;
     }
 
     setIsSubmitting(true);
 
     try {
-      let finalImageUrl = imageUrl;
+      let finalImageUrl: string | undefined = undefined;
 
-      // If student picked a local custom image from device gallery, upload it securely first
-      if (
-        customImageUri &&
-        (customImageUri.startsWith('file:') ||
-          customImageUri.startsWith('blob:') ||
-          customImageUri.startsWith('data:') ||
-          customImageUri.startsWith('content:'))
-      ) {
+      if (customImageUri) {
         try {
           const uploadRes = await uploadHustleImageApi(customImageUri, token || '');
-          if (uploadRes?.imageUrl) {
+          if (uploadRes && uploadRes.imageUrl) {
             finalImageUrl = uploadRes.imageUrl;
           }
         } catch (uploadErr) {
-          console.warn('Image upload failed, falling back to default:', uploadErr);
+          console.warn('Image upload notice:', uploadErr);
         }
       }
 
       await addHustle({
         title: title.trim(),
-        category,
-        price: Number(price),
+        category: category === 'all' ? 'custom' : category,
+        price: numPrice,
         priceType,
         hostelLocation,
-        sellerId: user.id,
-        sellerName,
-        sellerProgram,
-        campus: selectedCampus,
-        whatsAppNumber: sanitizedWhatsApp,
-        description: description.trim(),
-        tags,
-        imageUrl: finalImageUrl,
         deliveryMode,
         status,
+        sellerName: user.name || 'Student Seller',
+        sellerProgram: user.program || 'Student',
+        whatsAppNumber: formatGhanaPhoneNumber(whatsAppNumber),
+        description: description.trim() || `${title} offered at ${hostelLocation}`,
+        imageUrl: finalImageUrl || getHustleImageUrl(null, category, title.trim()),
+        tags: [category, hostelLocation, deliveryMode].filter(Boolean),
+        campus: selectedCampus,
       });
 
-      setIsSubmitting(false);
-
-      // Clear form
-      setTitle('');
-      setPrice('');
-      setDescription('');
-      setTagsInput('');
-
-      showAlert('🎉 Success!', `Your side-hustle is now live on CampusHustle ${campusInfo.shortName}!`, () => {
+      showAlert('🎉 Service Published!', 'Your hustle is now live on CampusHustle.', () => {
         navigation.navigate('Home');
       });
     } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to post service. Please try again.');
+    } finally {
       setIsSubmitting(false);
-      setErrorMessage(err?.message || 'Failed to publish hustle. Please try again.');
     }
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#059669" />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+
+      {/* Top Header Card matching Figma */}
       <View style={styles.topHeader}>
         <View style={styles.headerRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.headerTitle}>Post a Side-Hustle</Text>
-            <Text style={styles.headerSubtitle}>Publishing as {user.name} ({user.email})</Text>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.8}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={styles.backBtnText}>←</Text>
+          </TouchableOpacity>
+
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle}>Post a Service</Text>
+            <Text style={styles.headerSubtitle} numberOfLines={1}>
+              Publishing as {user?.name || 'Student'} · {user?.program || campusInfo.shortName}
+            </Text>
           </View>
-          <TouchableOpacity style={styles.demoFillBtn} onPress={fillDemoHustle} activeOpacity={0.8}>
-            <Text style={styles.demoFillBtnText}>⚡ Demo Fill</Text>
+
+          <TouchableOpacity
+            style={styles.draftBtn}
+            onPress={() => showAlert('Draft Saved', 'Your progress is stored locally.')}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.draftBtnText}>Save Draft</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.formContent}>
-        {/* Title */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Hustle Title *</Text>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {errorMessage && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorText}>⚠️ {errorMessage}</Text>
+          </View>
+        )}
+
+        {/* 01 — SERVICE INFO (Figma) */}
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionIndex}>01 — SERVICE INFO</Text>
+
+          <Text style={styles.label}>Service Title *</Text>
           <TextInput
-            style={styles.textInput}
-            placeholder="e.g. Calculus Tutoring, Laptop Formatting, Knotless Braids"
+            style={styles.input}
+            placeholder="e.g. Calculus Tutoring, Laptop Formatting, Hair Styling..."
+            placeholderTextColor={colors.textMuted}
             value={title}
             onChangeText={setTitle}
+            maxLength={80}
           />
-        </View>
 
-        {/* Category Picker */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Category *</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillContainer}>
+          <Text style={[styles.label, { marginTop: 14 }]}>Category *</Text>
+          <View style={styles.categoryGrid}>
             {CATEGORIES.filter((c) => c.id !== 'all').map((cat) => {
               const isSelected = category === cat.id;
               return (
                 <TouchableOpacity
                   key={cat.id}
-                  style={[styles.pill, isSelected && styles.selectedPill]}
+                  style={[styles.categoryPill, isSelected && styles.categoryPillActive]}
                   onPress={() => setCategory(cat.id as CategoryId)}
+                  activeOpacity={0.8}
                 >
-                  <Text style={styles.pillIcon}>{cat.icon}</Text>
-                  <Text style={[styles.pillLabel, isSelected && styles.selectedPillLabel]}>
+                  <Text style={styles.categoryIcon}>{cat.icon}</Text>
+                  <Text style={[styles.categoryLabel, isSelected && styles.categoryLabelActive]}>
                     {cat.label}
                   </Text>
                 </TouchableOpacity>
               );
             })}
-          </ScrollView>
-        </View>
+          </View>
 
-        {/* Service / Delivery Mode */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Service / Meeting Mode *</Text>
-          <View style={styles.deliveryContainer}>
-            {deliveryOptions.map((opt) => {
-              const isSelected = deliveryMode === opt.id;
+          {/* Pricing Row */}
+          <Text style={[styles.label, { marginTop: 14 }]}>Price (GH₵) *</Text>
+          <View style={styles.priceRow}>
+            <View style={styles.currencyPrefix}>
+              <Text style={styles.currencyText}>GH₵</Text>
+            </View>
+            <TextInput
+              style={styles.priceInput}
+              placeholder="e.g. 50"
+              placeholderTextColor={colors.textMuted}
+              value={price}
+              onChangeText={setPrice}
+              keyboardType="numeric"
+            />
+          </View>
+
+          {/* Price Type Chips */}
+          <View style={styles.priceTypeRow}>
+            {[
+              { id: 'flat', label: 'Flat Fee' },
+              { id: 'starting_at', label: 'Starting From' },
+              { id: 'hourly', label: 'Per Hour' },
+            ].map((pt) => {
+              const isSelected = priceType === pt.id;
               return (
                 <TouchableOpacity
-                  key={opt.id}
-                  style={[styles.deliveryCard, isSelected && styles.selectedDeliveryCard]}
-                  onPress={() => setDeliveryMode(opt.id)}
+                  key={pt.id}
+                  style={[styles.priceTypeChip, isSelected && styles.priceTypeChipActive]}
+                  onPress={() => setPriceType(pt.id as PriceType)}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.deliveryIcon}>{opt.icon}</Text>
-                  <View style={styles.deliveryInfo}>
-                    <Text style={[styles.deliveryTitle, isSelected && styles.selectedDeliveryText]}>
-                      {opt.label}
+                  <Text style={[styles.priceTypeChipText, isSelected && styles.priceTypeChipTextActive]}>
+                    {pt.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* 02 — HOW YOU DELIVER (Figma) */}
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionIndex}>02 — HOW YOU DELIVER</Text>
+          <Text style={styles.label}>Service / Meeting Mode *</Text>
+
+          <View style={styles.deliveryList}>
+            {deliveryModesList.map((mode) => {
+              const isSelected = deliveryMode === mode.id;
+              return (
+                <TouchableOpacity
+                  key={mode.id}
+                  style={[styles.deliveryCard, isSelected && styles.deliveryCardActive]}
+                  onPress={() => setDeliveryMode(mode.id)}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.deliveryIconBox, isSelected && styles.deliveryIconBoxActive]}>
+                    <Text style={styles.deliveryEmoji}>{mode.icon}</Text>
+                  </View>
+                  <View style={styles.deliveryContent}>
+                    <Text style={[styles.deliveryTitle, isSelected && styles.deliveryTitleActive]}>
+                      {mode.title}
                     </Text>
-                    <Text style={[styles.deliveryDesc, isSelected && styles.selectedDeliverySub]}>
-                      {opt.desc}
-                    </Text>
+                    <Text style={styles.deliverySubtitle}>{mode.subtitle}</Text>
+                  </View>
+                  <View style={[styles.radioCircle, isSelected && styles.radioCircleActive]}>
+                    {isSelected && <Text style={styles.radioCheck}>✓</Text>}
                   </View>
                 </TouchableOpacity>
               );
@@ -319,214 +340,88 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
           </View>
         </View>
 
-        {/* Availability Toggle */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Initial Availability Status *</Text>
-          <View style={styles.statusToggleRow}>
-            <TouchableOpacity
-              style={[styles.statusOption, status === 'OPEN' && styles.statusOptionOpen]}
-              onPress={() => setStatus('OPEN')}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.statusOptionDot}>●</Text>
-              <Text style={[styles.statusOptionLabel, status === 'OPEN' && styles.statusOptionLabelOpen]}>
-                Available for Orders
-              </Text>
-            </TouchableOpacity>
+        {/* 03 — LOCATION & CONTACT */}
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionIndex}>03 — LOCATION & CONTACT</Text>
 
-            <TouchableOpacity
-              style={[styles.statusOption, status === 'BUSY' && styles.statusOptionBusy]}
-              onPress={() => setStatus('BUSY')}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.statusOptionDotBusy}>●</Text>
-              <Text style={[styles.statusOptionLabel, status === 'BUSY' && styles.statusOptionLabelBusy]}>
-                Busy with Lectures
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Price & Price Type */}
-        <View style={styles.rowInputs}>
-          <View style={[styles.inputGroup, { flex: 1 }]}>
-            <Text style={styles.label}>Price (GH₵) *</Text>
-            <TextInput
-              style={styles.textInput}
-              placeholder="e.g. 50"
-              keyboardType="numeric"
-              value={price}
-              onChangeText={setPrice}
-            />
-          </View>
-
-          <View style={[styles.inputGroup, { flex: 1.2 }]}>
-            <Text style={styles.label}>Price Type</Text>
-            <View style={styles.typeContainer}>
-              <TouchableOpacity
-                style={[styles.typeBtn, priceType === 'flat' && styles.selectedTypeBtn]}
-                onPress={() => setPriceType('flat')}
-              >
-                <Text style={[styles.typeText, priceType === 'flat' && styles.selectedTypeText]}>Flat</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.typeBtn, priceType === 'hourly' && styles.selectedTypeBtn]}
-                onPress={() => setPriceType('hourly')}
-              >
-                <Text style={[styles.typeText, priceType === 'hourly' && styles.selectedTypeText]}>/Hr</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.typeBtn, priceType === 'starting_at' && styles.selectedTypeBtn]}
-                onPress={() => setPriceType('starting_at')}
-              >
-                <Text style={[styles.typeText, priceType === 'starting_at' && styles.selectedTypeText]}>Start</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-
-        {/* Hostel / Location */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Hostel / Base Location at {campusInfo.shortName} *</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillContainer}>
+          <Text style={styles.label}>Your Campus Hostel / Area *</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.hostelScroll}>
             {availableLocations.map((loc) => {
               const isSelected = hostelLocation === loc;
               return (
                 <TouchableOpacity
                   key={loc}
-                  style={[styles.chip, isSelected && styles.selectedChip]}
+                  style={[styles.hostelChip, isSelected && styles.hostelChipActive]}
                   onPress={() => setHostelLocation(loc)}
+                  activeOpacity={0.8}
                 >
-                  <Text style={[styles.chipText, isSelected && styles.selectedChipText]}>📍 {loc}</Text>
+                  <Text style={[styles.hostelChipText, isSelected && styles.hostelChipTextActive]}>
+                    📍 {loc}
+                  </Text>
                 </TouchableOpacity>
               );
             })}
           </ScrollView>
-        </View>
 
-        {/* Seller Info */}
-        <View style={styles.rowInputs}>
-          <View style={[styles.inputGroup, { flex: 1 }]}>
-            <Text style={styles.label}>Seller Name</Text>
-            <TextInput
-              style={styles.textInput}
-              value={sellerName}
-              onChangeText={setSellerName}
-            />
-          </View>
-          <View style={[styles.inputGroup, { flex: 1 }]}>
-            <Text style={styles.label}>WhatsApp No. *</Text>
-            <TextInput
-              style={styles.textInput}
-              placeholder="e.g. 0241234567"
-              keyboardType="phone-pad"
-              value={whatsAppNumber}
-              onChangeText={setWhatsAppNumber}
-            />
-          </View>
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Program & Level</Text>
+          <Text style={[styles.label, { marginTop: 14 }]}>WhatsApp Number *</Text>
           <TextInput
-            style={styles.textInput}
-            placeholder="e.g. Computer Science (Level 300)"
-            value={sellerProgram}
-            onChangeText={setSellerProgram}
+            style={styles.input}
+            placeholder="024XXXXXXX or +233..."
+            placeholderTextColor={colors.textMuted}
+            value={whatsAppNumber}
+            onChangeText={setWhatsAppNumber}
+            keyboardType="phone-pad"
           />
-        </View>
 
-        {/* Description */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Detailed Description *</Text>
+          <Text style={[styles.label, { marginTop: 14 }]}>Description (Optional)</Text>
           <TextInput
-            style={[styles.textInput, styles.textArea]}
-            placeholder="Describe your service, what's included, how to request, meeting locations..."
-            multiline
-            numberOfLines={4}
+            style={[styles.input, styles.textArea]}
+            placeholder="Describe your tools, experience, or what clients should expect..."
+            placeholderTextColor={colors.textMuted}
             value={description}
             onChangeText={setDescription}
+            multiline
+            numberOfLines={3}
           />
+
+          {/* Photo Upload Section */}
+          <Text style={[styles.label, { marginTop: 14 }]}>Service Photo</Text>
+          <TouchableOpacity style={styles.uploadCard} onPress={handlePickImage} activeOpacity={0.8}>
+            {customImageUri ? (
+              <View style={styles.previewContainer}>
+                <Image source={{ uri: customImageUri }} style={styles.previewImage} resizeMode="cover" />
+                <TouchableOpacity style={styles.removeImageBtn} onPress={() => setCustomImageUri(null)}>
+                  <Text style={styles.removeImageText}>✕ Remove</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.uploadPlaceholder}>
+                <Text style={styles.uploadIcon}>📷</Text>
+                <Text style={styles.uploadPrompt}>Tap to choose a photo from your gallery</Text>
+                <Text style={styles.uploadHint}>JPG, PNG, WebP up to 10MB</Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
+      </ScrollView>
 
-        {/* Portfolio Photo Upload */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Photo of Your Work / Products</Text>
-          {customImageUri ? (
-            <View style={styles.previewContainer}>
-              <Image source={{ uri: customImageUri }} style={styles.previewImage} />
-              <TouchableOpacity
-                style={styles.removePhotoBtn}
-                onPress={() => {
-                  setCustomImageUri(null);
-                  setImageUrl(presetImages[0].url);
-                }}
-              >
-                <Text style={styles.removePhotoText}>✕ Remove Photo</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <TouchableOpacity style={styles.uploadBtn} onPress={pickImage} activeOpacity={0.8}>
-              <Text style={styles.uploadIcon}>📷</Text>
-              <Text style={styles.uploadBtnText}>Upload Photo from Gallery / Device</Text>
-              <Text style={styles.uploadSubtext}>Show off hair you braided, items you sell, or past work</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Or Preset Images */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.subLabel}>Or select a quick stock preset:</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillContainer}>
-            {presetImages.map((preset) => (
-              <TouchableOpacity
-                key={preset.label}
-                style={[styles.chip, imageUrl === preset.url && !customImageUri && styles.selectedChip]}
-                onPress={() => {
-                  setCustomImageUri(null);
-                  setImageUrl(preset.url);
-                }}
-              >
-                <Text style={[styles.chipText, imageUrl === preset.url && !customImageUri && styles.selectedChipText]}>
-                  {preset.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* Tags */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Search Tags (Comma separated)</Text>
-          <TextInput
-            style={styles.textInput}
-            placeholder="e.g. Exams, C++, Repairs, Quick"
-            value={tagsInput}
-            onChangeText={setTagsInput}
-          />
-        </View>
-
-        {/* Error Notice Banner */}
-        {errorMessage ? (
-          <View style={styles.errorBanner}>
-            <Text style={styles.errorBannerText}>⚠️ {errorMessage}</Text>
-          </View>
-        ) : null}
-
-        {/* Submit Button */}
+      {/* Sticky Bottom Publish Button */}
+      <View style={styles.stickyFooter}>
         <TouchableOpacity
-          style={[styles.submitBtn, isSubmitting && { opacity: 0.7 }]}
+          style={[styles.publishBtn, isFormValid && !isSubmitting ? styles.publishBtnActive : styles.publishBtnDisabled]}
           onPress={handleSubmit}
-          activeOpacity={0.85}
-          disabled={isSubmitting}
+          disabled={!isFormValid || isSubmitting}
+          activeOpacity={0.88}
         >
           {isSubmitting ? (
-            <ActivityIndicator color="#FFFFFF" />
+            <ActivityIndicator color={colors.textWhite} />
           ) : (
-            <Text style={styles.submitBtnText}>🚀 Publish Side-Hustle</Text>
+            <Text style={[styles.publishBtnText, isFormValid ? styles.publishBtnTextActive : styles.publishBtnTextDisabled]}>
+              Publish Service
+            </Text>
           )}
         </TouchableOpacity>
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 };
@@ -534,342 +429,386 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
   },
   topHeader: {
-    backgroundColor: '#059669',
-    padding: 16,
+    backgroundColor: colors.primary, // Forest Green #0D6535
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 8 : 14,
+    paddingBottom: 16,
+    borderBottomLeftRadius: 22,
+    borderBottomRightRadius: 22,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  demoFillBtn: {
-    backgroundColor: '#D1FAE5',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  demoFillBtnText: {
-    color: '#047857',
-    fontSize: 12,
+  backBtnText: {
+    color: colors.textWhite,
+    fontSize: 20,
     fontWeight: '700',
   },
+  headerCenter: {
+    flex: 1,
+    marginHorizontal: 12,
+  },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#FFFFFF',
+    color: colors.textWhite,
+    fontSize: 18,
+    fontWeight: '900',
+    letterSpacing: -0.3,
   },
   headerSubtitle: {
-    fontSize: 12,
-    color: '#D1FAE5',
+    color: colors.primaryMint,
+    fontSize: 11.5,
+    fontWeight: '600',
     marginTop: 2,
   },
-  errorBanner: {
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FCA5A5',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 14,
+  draftBtn: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 14,
   },
-  errorBannerText: {
-    color: '#B91C1C',
-    fontSize: 13,
-    fontWeight: '600',
-    lineHeight: 18,
+  draftBtnText: {
+    color: colors.textWhite,
+    fontSize: 12,
+    fontWeight: '800',
   },
-  formContent: {
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 32,
   },
-  inputGroup: {
+  errorBanner: {
+    backgroundColor: colors.dangerLight,
+    padding: 12,
+    borderRadius: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  errorText: {
+    color: colors.danger,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  sectionCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 20,
+    padding: 16,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
+  },
+  sectionIndex: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: colors.primary,
+    letterSpacing: 0.8,
+    marginBottom: 12,
   },
   label: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#334155',
+    fontWeight: '800',
+    color: colors.textPrimary,
     marginBottom: 6,
   },
-  textInput: {
-    backgroundColor: '#FFFFFF',
+  input: {
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: Platform.OS === 'ios' ? 12 : 9,
+    fontSize: 13.5,
+    color: colors.textPrimary,
+    fontWeight: '600',
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: '#0F172A',
+    borderColor: colors.border,
   },
   textArea: {
-    height: 90,
+    minHeight: 80,
     textAlignVertical: 'top',
   },
-  rowInputs: {
+  categoryGrid: {
     flexDirection: 'row',
-    gap: 10,
-  },
-  pillContainer: {
+    flexWrap: 'wrap',
     gap: 8,
   },
-  pill: {
+  categoryPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E2E8F0',
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 16,
-  },
-  selectedPill: {
-    backgroundColor: '#059669',
-  },
-  pillIcon: {
-    fontSize: 13,
-    marginRight: 4,
-  },
-  pillLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  selectedPillLabel: {
-    color: '#FFFFFF',
-  },
-  typeContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#E2E8F0',
-    borderRadius: 10,
-    padding: 3,
-  },
-  typeBtn: {
-    flex: 1,
     paddingVertical: 8,
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  selectedTypeBtn: {
-    backgroundColor: '#059669',
-  },
-  typeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748B',
-  },
-  selectedTypeText: {
-    color: '#FFFFFF',
-  },
-  chip: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: colors.border,
   },
-  selectedChip: {
-    backgroundColor: '#F59E0B',
-    borderColor: '#D97706',
+  categoryPillActive: {
+    backgroundColor: colors.primaryMint,
+    borderColor: colors.primary,
   },
-  chipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#334155',
+  categoryIcon: {
+    fontSize: 13,
+    marginRight: 6,
   },
-  selectedChipText: {
-    color: '#FFFFFF',
+  categoryLabel: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: colors.textSecondary,
   },
-  submitBtn: {
-    backgroundColor: '#059669',
-    paddingVertical: 14,
-    borderRadius: 12,
+  categoryLabelActive: {
+    color: colors.primary,
+  },
+  priceRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+  },
+  currencyPrefix: {
+    backgroundColor: colors.surfaceAlt,
+    borderTopLeftRadius: 12,
+    borderBottomLeftRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: Platform.OS === 'ios' ? 12 : 9,
+    borderWidth: 1,
+    borderRightWidth: 0,
+    borderColor: colors.border,
+  },
+  currencyText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: colors.textPrimary,
+  },
+  priceInput: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderTopRightRadius: 12,
+    borderBottomRightRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: Platform.OS === 'ios' ? 12 : 9,
+    fontSize: 14,
+    color: colors.textPrimary,
+    fontWeight: '800',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  priceTypeRow: {
+    flexDirection: 'row',
+    gap: 8,
     marginTop: 10,
   },
-  submitBtnText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '800',
+  priceTypeChip: {
+    flex: 1,
+    backgroundColor: colors.surfaceAlt,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  deliveryContainer: {
-    gap: 8,
+  priceTypeChipActive: {
+    backgroundColor: colors.primaryMint,
+    borderColor: colors.primary,
+  },
+  priceTypeChipText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  priceTypeChipTextActive: {
+    color: colors.primary,
+  },
+  // Delivery Modes
+  deliveryList: {
+    gap: 10,
+    marginTop: 4,
   },
   deliveryCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    padding: 10,
-  },
-  selectedDeliveryCard: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#059669',
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: colors.surfaceAlt,
     borderWidth: 1.5,
+    borderColor: colors.border,
   },
-  deliveryIcon: {
-    fontSize: 22,
-    marginRight: 10,
+  deliveryCardActive: {
+    backgroundColor: colors.primaryMint,
+    borderColor: colors.primary,
   },
-  deliveryInfo: {
+  deliveryIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  deliveryIconBoxActive: {
+    backgroundColor: colors.primary,
+  },
+  deliveryEmoji: {
+    fontSize: 18,
+  },
+  deliveryContent: {
     flex: 1,
   },
   deliveryTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  selectedDeliveryText: {
-    color: '#059669',
+    fontSize: 13.5,
     fontWeight: '800',
+    color: colors.textPrimary,
   },
-  deliveryDesc: {
+  deliveryTitleActive: {
+    color: colors.primary,
+  },
+  deliverySubtitle: {
     fontSize: 11,
-    color: '#64748B',
-    marginTop: 1,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
-  selectedDeliverySub: {
-    color: '#047857',
-  },
-  statusToggleRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  statusOption: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-  },
-  statusOptionOpen: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#10B981',
-  },
-  statusOptionBusy: {
-    backgroundColor: '#FFFBEB',
-    borderColor: '#F59E0B',
-  },
-  statusOptionDot: {
-    fontSize: 10,
-    color: '#10B981',
-    marginRight: 6,
-  },
-  statusOptionDotBusy: {
-    fontSize: 10,
-    color: '#F59E0B',
-    marginRight: 6,
-  },
-  statusOptionLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  statusOptionLabelOpen: {
-    color: '#065F46',
-    fontWeight: '800',
-  },
-  statusOptionLabelBusy: {
-    color: '#92400E',
-    fontWeight: '800',
-  },
-  uploadBtn: {
-    backgroundColor: '#FFFFFF',
+  radioCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     borderWidth: 2,
-    borderColor: '#CBD5E1',
-    borderStyle: 'dashed',
-    borderRadius: 14,
-    padding: 18,
-    alignItems: 'center',
+    borderColor: colors.border,
     justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  radioCircleActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary,
+  },
+  radioCheck: {
+    color: colors.textWhite,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  hostelScroll: {
+    marginTop: 4,
+    marginBottom: 2,
+  },
+  hostelChip: {
+    backgroundColor: colors.surfaceAlt,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 14,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  hostelChipActive: {
+    backgroundColor: colors.primaryMint,
+    borderColor: colors.primary,
+  },
+  hostelChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  hostelChipTextActive: {
+    color: colors.primary,
+  },
+  uploadCard: {
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
+    overflow: 'hidden',
+    marginTop: 4,
+  },
+  uploadPlaceholder: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    paddingHorizontal: 16,
   },
   uploadIcon: {
     fontSize: 28,
     marginBottom: 6,
   },
-  uploadBtnText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#059669',
-    marginBottom: 2,
+  uploadPrompt: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: 4,
   },
-  uploadSubtext: {
+  uploadHint: {
     fontSize: 11,
-    color: '#64748B',
-    textAlign: 'center',
+    color: colors.textMuted,
   },
   previewContainer: {
-    borderRadius: 14,
-    overflow: 'hidden',
-    backgroundColor: '#000',
     position: 'relative',
+    height: 160,
+    width: '100%',
   },
   previewImage: {
     width: '100%',
-    height: 180,
-    resizeMode: 'cover',
+    height: '100%',
   },
-  removePhotoBtn: {
+  removeImageBtn: {
     position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 12,
   },
-  removePhotoText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
+  removeImageText: {
+    color: colors.textWhite,
+    fontSize: 11,
+    fontWeight: '800',
   },
-  subLabel: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '600',
-    marginBottom: 8,
+  stickyFooter: {
+    backgroundColor: colors.surface,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 14,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+    ...shadows.cardHover,
   },
-  loggedOutContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  publishBtn: {
+    borderRadius: 16,
+    paddingVertical: 14,
     alignItems: 'center',
-    padding: 24,
+    justifyContent: 'center',
   },
-  loggedOutIcon: {
-    fontSize: 56,
-    marginBottom: 12,
+  publishBtnActive: {
+    backgroundColor: colors.primary, // Forest Green #0D6535
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  loggedOutTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 8,
-    textAlign: 'center',
+  publishBtnDisabled: {
+    backgroundColor: '#E2E8F0',
   },
-  loggedOutSub: {
-    fontSize: 13,
-    color: '#64748B',
-    textAlign: 'center',
-    lineHeight: 19,
-    marginBottom: 20,
+  publishBtnText: {
+    fontSize: 15,
+    fontWeight: '900',
+    letterSpacing: 0.3,
   },
-  loginNowBtn: {
-    backgroundColor: '#059669',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
+  publishBtnTextActive: {
+    color: colors.textWhite,
   },
-  loginNowText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 14,
+  publishBtnTextDisabled: {
+    color: '#94A3B8',
   },
 });

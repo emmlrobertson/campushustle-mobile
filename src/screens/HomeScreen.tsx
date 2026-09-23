@@ -10,6 +10,7 @@ import {
   SafeAreaView,
   StatusBar,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { useHustleContext } from '../context/HustleContext';
 import { Header } from '../components/Header';
@@ -17,6 +18,7 @@ import { CategoryFilter } from '../components/CategoryFilter';
 import { LocationFilter } from '../components/LocationFilter';
 import { HustleCard } from '../components/HustleCard';
 import { CAMPUS_METADATA } from '../data/mockData';
+import { colors, shadows } from '../theme/colors';
 
 interface HomeScreenProps {
   navigation: any;
@@ -37,6 +39,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
   const campusInfo = CAMPUS_METADATA[selectedCampus] || CAMPUS_METADATA.knust;
 
+  // Top Student Hustlers for the horizontal story/avatar bar (Figma)
+  const topHustlers = [
+    { id: '1', initials: 'AM', name: 'Abena', badge: 'Fast Delivery', bg: colors.badgeGreenBg, text: colors.badgeGreenText },
+    { id: '2', initials: 'KA', name: 'Kwame', badge: 'New', bg: colors.badgePurpleBg, text: colors.badgePurpleText },
+    { id: '3', initials: 'ET', name: 'Emmanuel', badge: 'Popular', bg: colors.badgeBlueBg, text: colors.badgeBlueText },
+    { id: '4', initials: 'KO', name: 'Kofi', badge: 'Top Rated', bg: colors.badgeGoldBg, text: colors.badgeGoldText },
+    { id: '5', initials: 'AS', name: 'Ama', badge: 'Beauty', bg: colors.badgePinkBg, text: colors.badgePinkText },
+    { id: '6', initials: 'DB', name: 'Daniel', badge: 'Tutoring', bg: colors.badgeGreenBg, text: colors.badgeGreenText },
+  ];
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
@@ -45,9 +57,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       <FlatList
         data={filteredHustles}
         keyExtractor={(item) => item.id}
+        numColumns={2}
+        columnWrapperStyle={styles.columnWrapper}
         renderItem={({ item }) => (
           <HustleCard
             hustle={item}
+            isGrid={true}
             onPress={() => navigation.navigate('HustleDetail', { hustleId: item.id })}
           />
         )}
@@ -56,77 +71,69 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           <RefreshControl
             refreshing={isLoading}
             onRefresh={refreshHustles}
-            colors={['#059669']}
-            tintColor="#059669"
+            colors={[colors.primary]}
+            tintColor={colors.primary}
           />
         }
         ListHeaderComponent={
           <View style={styles.headerWrapper}>
-            {/* Search Bar */}
+            {/* Top Hustler Avatar Row (Figma) */}
+            <View style={styles.avatarBarSection}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.avatarScroll}
+              >
+                {topHustlers.map((hustler) => (
+                  <TouchableOpacity
+                    key={hustler.id}
+                    style={styles.hustlerPill}
+                    activeOpacity={0.8}
+                    onPress={() => setSearchQuery(hustler.name)}
+                  >
+                    <View style={styles.hustlerAvatar}>
+                      <Text style={styles.hustlerInitials}>{hustler.initials}</Text>
+                    </View>
+                    <View style={styles.hustlerInfo}>
+                      <Text style={styles.hustlerName}>{hustler.name}</Text>
+                      <View style={[styles.hustlerBadge, { backgroundColor: hustler.bg }]}>
+                        <Text style={[styles.hustlerBadgeText, { color: hustler.text }]}>
+                          {hustler.badge}
+                        </Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
+            {/* Search Bar matching Figma */}
             <View style={styles.searchBar}>
               <Text style={styles.searchIcon}>🔍</Text>
               <TextInput
                 style={styles.searchInput}
-                placeholder="Search tutoring, repairs, food, braids..."
-                placeholderTextColor="#94A3B8"
+                placeholder="Search tutoring, food, repairs..."
+                placeholderTextColor={colors.textMuted}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
               />
               {searchQuery !== '' && (
-                <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+                <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Text style={styles.clearText}>✕</Text>
                 </TouchableOpacity>
               )}
             </View>
 
-            {/* Trending Search Suggestion Chips */}
-            <View style={styles.suggestionSection}>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.suggestionsScroll}
-              >
-                {[
-                  { label: '📐 Calculus Tutoring', query: 'calculus' },
-                  { label: '📱 Screen Repair', query: 'screen' },
-                  { label: '💇 Knotless Braids', query: 'braids' },
-                  { label: '🎂 Birthday Cake', query: 'cake' },
-                  { label: '🧺 Laundry Runner', query: 'laundry' },
-                  { label: '📸 Photo Shoot', query: 'photo' },
-                  { label: '💻 Web / Graphics', query: 'design' },
-                ].map((item) => {
-                  const isSelected = searchQuery.toLowerCase() === item.query.toLowerCase();
-                  return (
-                    <TouchableOpacity
-                      key={item.query}
-                      style={[styles.suggestionChip, isSelected && styles.suggestionChipActive]}
-                      onPress={() => setSearchQuery(isSelected ? '' : item.query)}
-                      activeOpacity={0.8}
-                    >
-                      <Text
-                        style={[
-                          styles.suggestionChipText,
-                          isSelected && styles.suggestionChipTextActive,
-                        ]}
-                      >
-                        {item.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
-
-            {/* Category Filter Horizontal Pills */}
+            {/* Category Filter Horizontal Pills with 'Other' custom input */}
             <CategoryFilter />
 
             {/* Hostel Dropdown Filter */}
             <LocationFilter />
 
-            {/* Results Count Bar */}
+            {/* Results Count & Live Status Bar */}
             <View style={styles.resultsBar}>
               <Text style={styles.resultsCount}>
-                {filteredHustles.length} Hustles Found
+                {filteredHustles.length} Services available
               </Text>
               <View style={styles.liveBadge}>
                 <Text style={styles.liveDot}>●</Text>
@@ -136,65 +143,44 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           </View>
         }
         ListFooterComponent={
-          /* Got a skill? Post it! Callout Banner from Figma */
+          /* Deep Forest Green Callout Banner from Figma */
           <View style={styles.ctaBanner}>
             <View style={styles.ctaTextContainer}>
-              <Text style={styles.ctaTitle}>Got a skill? Post it!</Text>
-              <Text style={styles.ctaSubtitle}>Earn from your classmates today</Text>
+              <Text style={styles.ctaTitle}>Have a skill? Start earning</Text>
+              <Text style={styles.ctaSubtitle}>
+                Post your service and connect with students
+              </Text>
             </View>
             <TouchableOpacity
               style={styles.ctaButton}
               onPress={() => navigation.navigate('Post')}
-              activeOpacity={0.85}
+              activeOpacity={0.88}
             >
-              <Text style={styles.ctaButtonText}>+ Post Hustle</Text>
+              <Text style={styles.ctaButtonText}>Post →</Text>
             </TouchableOpacity>
           </View>
         }
         ListEmptyComponent={
-          <View style={styles.emptyState}>
-            {error ? (
-              <>
-                <Text style={styles.emptyIcon}>⚠️</Text>
-                <Text style={styles.emptyTitle}>Unable to Load Listings</Text>
-                <Text style={styles.emptySubtitle}>{error}</Text>
+          !isLoading ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyIcon}>🔍</Text>
+              <Text style={styles.emptyTitle}>No matching services found</Text>
+              <Text style={styles.emptySubtitle}>
+                Try adjusting your search query, selecting "All", or choosing a different campus hostel location.
+              </Text>
+              {(searchQuery !== '' || selectedLocation !== 'All Locations' || selectedCategory !== 'all') && (
                 <TouchableOpacity
-                  style={styles.resetButton}
-                  onPress={refreshHustles}
+                  style={styles.resetBtn}
+                  onPress={() => {
+                    setSearchQuery('');
+                  }}
+                  activeOpacity={0.8}
                 >
-                  <Text style={styles.resetButtonText}>🔄 Tap to Retry</Text>
+                  <Text style={styles.resetBtnText}>Reset All Filters</Text>
                 </TouchableOpacity>
-              </>
-            ) : searchQuery !== '' || selectedCategory !== 'all' || selectedLocation !== 'All Locations' ? (
-              <>
-                <Text style={styles.emptyIcon}>🔍</Text>
-                <Text style={styles.emptyTitle}>No hustles match your search</Text>
-                <Text style={styles.emptySubtitle}>
-                  Try clearing filters or searching for different keywords.
-                </Text>
-                <TouchableOpacity
-                  style={styles.resetButton}
-                  onPress={() => setSearchQuery('')}
-                >
-                  <Text style={styles.resetButtonText}>Clear Search</Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <>
-                <Text style={styles.emptyIcon}>🎓🔥</Text>
-                <Text style={styles.emptyTitle}>Welcome to CampusHustle {campusInfo.shortName}!</Text>
-                <Text style={styles.emptySubtitle}>
-                  Be the pioneer student to publish a side-hustle & earn from your classmates today!
-                </Text>
-                <TouchableOpacity
-                  style={styles.resetButton}
-                  onPress={() => navigation.navigate('Post')}
-                >
-                  <Text style={styles.resetButtonText}>🚀 Post the First Hustle</Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
+              )}
+            </View>
+          ) : null
         }
       />
     </SafeAreaView>
@@ -204,176 +190,215 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
+  },
+  listContent: {
+    paddingBottom: 28,
   },
   headerWrapper: {
-    paddingTop: 12,
+    marginBottom: 8,
   },
+  // Top Hustler Avatar Row
+  avatarBarSection: {
+    marginVertical: 10,
+  },
+  avatarScroll: {
+    paddingHorizontal: 16,
+    gap: 10,
+  },
+  hustlerPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
+  },
+  hustlerAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.primaryMint,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  hustlerInitials: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.primary,
+  },
+  hustlerInfo: {
+    justifyContent: 'center',
+  },
+  hustlerName: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.textPrimary,
+  },
+  hustlerBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginTop: 2,
+  },
+  hustlerBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+  },
+  // Search Bar
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 14,
     marginHorizontal: 16,
-    marginBottom: 4,
     paddingHorizontal: 14,
-    height: 46,
+    paddingVertical: Platform.OS === 'ios' ? 11 : 9,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
+    marginTop: 4,
+    marginBottom: 6,
   },
   searchIcon: {
-    fontSize: 16,
-    marginRight: 8,
+    fontSize: 14,
+    marginRight: 10,
   },
   searchInput: {
     flex: 1,
-    fontSize: 14,
-    color: '#0F172A',
-    fontWeight: '500',
+    fontSize: 13.5,
+    color: colors.textPrimary,
+    fontWeight: '600',
+    padding: 0,
   },
   clearButton: {
     padding: 4,
   },
   clearText: {
-    fontSize: 14,
-    color: '#94A3B8',
+    fontSize: 13,
+    color: colors.textMuted,
     fontWeight: '700',
   },
-  suggestionSection: {
-    marginVertical: 6,
-  },
-  suggestionsScroll: {
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  suggestionChip: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  suggestionChipActive: {
-    backgroundColor: '#059669',
-    borderColor: '#059669',
-  },
-  suggestionChipText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  suggestionChipTextActive: {
-    color: '#FFFFFF',
-  },
-  listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 30,
-  },
+  // Results bar
   resultsBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginVertical: 10,
-    paddingHorizontal: 4,
+    paddingHorizontal: 18,
+    marginTop: 6,
+    marginBottom: 12,
   },
   resultsCount: {
-    fontSize: 15,
+    fontSize: 13.5,
     fontWeight: '800',
-    color: '#0F172A',
+    color: colors.textPrimary,
   },
   liveBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    backgroundColor: colors.primaryMint,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
   },
   liveDot: {
+    color: colors.primary,
     fontSize: 8,
-    color: '#10B981',
+    marginRight: 4,
   },
   liveText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#64748B',
+    color: colors.primary,
+    fontSize: 11,
+    fontWeight: '800',
   },
+  columnWrapper: {
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+  },
+  // Deep Forest Green CTA Banner
   ctaBanner: {
-    backgroundColor: '#059669', // Emerald Green from Figma
-    borderRadius: 20,
-    padding: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 10,
-    marginBottom: 20,
-    shadowColor: '#059669',
+    backgroundColor: colors.primary, // #0D6535
+    borderRadius: 20,
+    marginHorizontal: 16,
+    marginTop: 18,
+    padding: 18,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
   },
   ctaTextContainer: {
     flex: 1,
-    marginRight: 10,
+    marginRight: 12,
   },
   ctaTitle: {
-    fontSize: 18,
+    color: colors.textWhite,
+    fontSize: 15,
     fontWeight: '900',
-    color: '#FFFFFF',
-    marginBottom: 2,
+    marginBottom: 4,
+    letterSpacing: -0.3,
   },
   ctaSubtitle: {
+    color: colors.primaryMint,
     fontSize: 12,
-    color: '#D1FAE5',
-    fontWeight: '500',
+    fontWeight: '600',
+    lineHeight: 16,
   },
   ctaButton: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 14,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 14,
+    borderRadius: 18,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
   ctaButtonText: {
-    color: '#059669',
+    color: colors.primary,
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '900',
   },
-  emptyState: {
+  emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 32,
-    marginTop: 20,
+    paddingVertical: 48,
+    paddingHorizontal: 32,
   },
   emptyIcon: {
-    fontSize: 48,
+    fontSize: 40,
     marginBottom: 12,
   },
   emptyTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#374151',
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.textPrimary,
     marginBottom: 6,
   },
   emptySubtitle: {
     fontSize: 13,
-    color: '#6B7280',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 18,
-    marginBottom: 16,
   },
-  resetButton: {
-    backgroundColor: '#059669',
+  resetBtn: {
+    marginTop: 16,
+    backgroundColor: colors.primary,
     paddingHorizontal: 18,
     paddingVertical: 10,
-    borderRadius: 10,
+    borderRadius: 14,
   },
-  resetButtonText: {
-    color: '#FFFFFF',
+  resetBtnText: {
+    color: colors.textWhite,
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '800',
   },
 });

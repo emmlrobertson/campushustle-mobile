@@ -12,16 +12,21 @@ import {
   ActivityIndicator,
   Platform,
   RefreshControl,
+  TextInput,
 } from 'react-native';
 import { useHustleContext } from '../context/HustleContext';
 import {
   fetchPaymentHistoryApi,
   releaseEscrowPaymentApi,
   fetchMyHustlesApi,
+  fetchPayoutAccountApi,
+  updatePayoutAccountApi,
+  PayoutAccountData,
 } from '../services/api';
 import { EscrowTransaction, Hustle } from '../types';
 import { CAMPUS_METADATA } from '../data/mockData';
 import { getHustleImageUrl } from '../utils/imageHelper';
+import { colors, shadows } from '../theme/colors';
 
 interface ProfileScreenProps {
   navigation: any;
@@ -79,12 +84,21 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const [releasingRef, setReleasingRef] = useState<string | null>(null);
   const [remoteListings, setRemoteListings] = useState<Hustle[]>([]);
 
+  // Payout Account State
+  const [payoutAccount, setPayoutAccount] = useState<PayoutAccountData | null>(null);
+  const [isEditingPayout, setIsEditingPayout] = useState(false);
+  const [payoutNetwork, setPayoutNetwork] = useState<'MTN_MOMO' | 'TELECEL_CASH' | 'AIRTEL_TIGO_MONEY'>('MTN_MOMO');
+  const [payoutPhone, setPayoutPhone] = useState('');
+  const [payoutName, setPayoutName] = useState('');
+  const [savingPayout, setSavingPayout] = useState(false);
+
   const loadProfileData = async () => {
     if (!token) return;
     try {
-      const [listings, ordersData] = await Promise.all([
+      const [listings, ordersData, payoutData] = await Promise.all([
         fetchMyHustlesApi(token).catch(() => []),
         fetchPaymentHistoryApi(token).catch(() => []),
+        fetchPayoutAccountApi(token).catch(() => null),
       ]);
       if (listings && Array.isArray(listings)) {
         setRemoteListings(listings);
@@ -92,8 +106,44 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
       if (ordersData && Array.isArray(ordersData)) {
         setOrders(ordersData);
       }
+      if (payoutData) {
+        setPayoutAccount(payoutData);
+      }
     } catch (e) {
       console.warn('Failed to refresh profile data:', e);
+    }
+  };
+
+  const handleSavePayout = async () => {
+    if (!token) return;
+    if (!payoutPhone.trim()) {
+      showAlert('Missing Number', 'Please enter your Mobile Money phone number.');
+      return;
+    }
+    if (!payoutName.trim()) {
+      showAlert('Missing Name', 'Please enter the registered account holder name.');
+      return;
+    }
+    setSavingPayout(true);
+    try {
+      const updated = await updatePayoutAccountApi(
+        {
+          network: payoutNetwork,
+          phoneNumber: payoutPhone.trim(),
+          accountName: payoutName.trim(),
+        },
+        token
+      );
+      setPayoutAccount(updated);
+      setIsEditingPayout(false);
+      showAlert(
+        '🎉 Payout Destination Verified',
+        'Your Ghanaian Mobile Money payout destination has been verified server-side for marketplace proceeds.'
+      );
+    } catch (err: any) {
+      showAlert('Payout Error', err.message || 'Could not verify Mobile Money account.');
+    } finally {
+      setSavingPayout(false);
     }
   };
 
@@ -212,7 +262,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
       <SafeAreaView style={styles.safeArea}>
         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
         <View style={styles.loggedOutContainer}>
-          <Text style={styles.loggedOutIcon}>👤</Text>
+          <View style={styles.loggedOutIconBox}>
+            <Text style={styles.loggedOutIcon}>👤</Text>
+          </View>
           <Text style={styles.loggedOutTitle}>{campusInfo.shortName} Student Profile</Text>
           <Text style={styles.loggedOutSub}>
             Sign in with your @{campusInfo.domain} email to view your profile, manage active listings, and track saved hustles.
@@ -232,10 +284,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#059669" />
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Student Profile</Text>
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+        <View>
+          <Text style={styles.headerTitle}>Student Profile</Text>
+          <Text style={styles.headerSubtitle}>{campusInfo.name}</Text>
+        </View>
+        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.8}>
           <Text style={styles.logoutText}>Log Out</Text>
         </TouchableOpacity>
       </View>
@@ -248,8 +303,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={['#059669']}
-            tintColor="#059669"
+            colors={[colors.primary]}
+            tintColor={colors.primary}
           />
         }
         ListHeaderComponent={
@@ -257,7 +312,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
             {/* User Profile Card */}
             <View style={styles.profileCard}>
               <View style={styles.avatarBig}>
-                <Text style={styles.avatarLetter}>{user.name.charAt(0)}</Text>
+                <Text style={styles.avatarLetter}>{user.name.charAt(0).toUpperCase()}</Text>
               </View>
               <Text style={styles.userName}>{user.name}</Text>
               <Text style={styles.userEmail}>{user.email}</Text>
@@ -287,6 +342,152 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
               <Text style={styles.roadmapText}>
                 Live across <Text style={{ fontWeight: '800' }}>KNUST (Kumasi)</Text>, <Text style={{ fontWeight: '800' }}>UG Legon (Accra)</Text>, and <Text style={{ fontWeight: '800' }}>UCC (Cape Coast)</Text> with verified student isolation!
               </Text>
+            </View>
+
+            {/* Seller Payout Destination Card */}
+            <View style={styles.payoutCard}>
+              <View style={styles.payoutHeaderRow}>
+                <View style={{ flex: 1, paddingRight: 8 }}>
+                  <Text style={styles.payoutSectionTitle}>💳 Mobile Money Payout Account</Text>
+                  <Text style={styles.payoutSectionSubtitle}>
+                    Verified Ghanaian MoMo destination where proceeds are settled
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.payoutBadge,
+                    payoutAccount?.isPayoutVerified ? styles.payoutBadgeVerified : styles.payoutBadgePending,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.payoutBadgeText,
+                      payoutAccount?.isPayoutVerified ? styles.payoutBadgeTextVerified : styles.payoutBadgeTextPending,
+                    ]}
+                  >
+                    {payoutAccount?.isPayoutVerified ? '✅ VERIFIED' : '⚠️ SETUP REQUIRED'}
+                  </Text>
+                </View>
+              </View>
+
+              {!isEditingPayout ? (
+                <View style={styles.payoutDetailsBox}>
+                  <View style={styles.payoutInfoRow}>
+                    <Text style={styles.payoutInfoLabel}>Network:</Text>
+                    <Text style={styles.payoutInfoValue}>
+                      {payoutAccount?.payoutMomoNetwork === 'TELECEL_CASH'
+                        ? '🔴 Telecel Cash'
+                        : payoutAccount?.payoutMomoNetwork === 'AIRTEL_TIGO_MONEY'
+                        ? '🔵 AirtelTigo Money'
+                        : '🟡 MTN Mobile Money'}
+                    </Text>
+                  </View>
+                  <View style={styles.payoutInfoRow}>
+                    <Text style={styles.payoutInfoLabel}>MoMo Number:</Text>
+                    <Text style={styles.payoutInfoValue}>
+                      {payoutAccount?.maskedPhoneNumber || 'No MoMo linked'}
+                    </Text>
+                  </View>
+                  {payoutAccount?.verifiedAccountName ? (
+                    <View style={styles.payoutInfoRow}>
+                      <Text style={styles.payoutInfoLabel}>Account Name:</Text>
+                      <Text style={styles.payoutInfoValue}>{payoutAccount.verifiedAccountName}</Text>
+                    </View>
+                  ) : null}
+
+                  <TouchableOpacity
+                    style={styles.configurePayoutBtn}
+                    onPress={() => {
+                      setPayoutNetwork(payoutAccount?.payoutMomoNetwork || 'MTN_MOMO');
+                      setPayoutPhone(payoutAccount?.maskedPhoneNumber ? '' : user?.whatsAppNumber || '');
+                      setPayoutName(payoutAccount?.verifiedAccountName || user?.name || '');
+                      setIsEditingPayout(true);
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.configurePayoutBtnText}>
+                      {payoutAccount?.hasConfiguredPayout
+                        ? '⚙️ Update Payout Destination'
+                        : '➕ Configure Payout Destination'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.payoutFormBox}>
+                  <Text style={styles.formInputLabel}>Mobile Money Network</Text>
+                  <View style={styles.networkSelectorRow}>
+                    {(['MTN_MOMO', 'TELECEL_CASH', 'AIRTEL_TIGO_MONEY'] as const).map((net) => {
+                      const isSelected = payoutNetwork === net;
+                      const label =
+                        net === 'MTN_MOMO'
+                          ? 'MTN MoMo'
+                          : net === 'TELECEL_CASH'
+                          ? 'Telecel'
+                          : 'AirtelTigo';
+                      return (
+                        <TouchableOpacity
+                          key={net}
+                          style={[styles.networkOption, isSelected && styles.networkOptionSelected]}
+                          onPress={() => setPayoutNetwork(net)}
+                          activeOpacity={0.8}
+                        >
+                          <Text
+                            style={[
+                              styles.networkOptionText,
+                              isSelected && styles.networkOptionTextSelected,
+                            ]}
+                          >
+                            {label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  <Text style={styles.formInputLabel}>Mobile Money Phone Number</Text>
+                  <TextInput
+                    style={styles.payoutInput}
+                    placeholder="e.g. 0241234567 or 233..."
+                    placeholderTextColor="#9CA3AF"
+                    keyboardType="phone-pad"
+                    value={payoutPhone}
+                    onChangeText={setPayoutPhone}
+                  />
+
+                  <Text style={styles.formInputLabel}>Registered Account Name</Text>
+                  <TextInput
+                    style={styles.payoutInput}
+                    placeholder="e.g. Kwame Mensah"
+                    placeholderTextColor="#9CA3AF"
+                    value={payoutName}
+                    onChangeText={setPayoutName}
+                  />
+
+                  <View style={styles.formActionRow}>
+                    <TouchableOpacity
+                      style={styles.cancelPayoutBtn}
+                      onPress={() => setIsEditingPayout(false)}
+                      activeOpacity={0.8}
+                      disabled={savingPayout}
+                    >
+                      <Text style={styles.cancelPayoutBtnText}>Cancel</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.savePayoutBtn}
+                      onPress={handleSavePayout}
+                      activeOpacity={0.85}
+                      disabled={savingPayout}
+                    >
+                      {savingPayout ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <Text style={styles.savePayoutBtnText}>Verify & Save</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
             </View>
 
             <Text style={styles.sectionTitle}>My Active Side-Hustles</Text>
@@ -356,6 +557,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
             <TouchableOpacity
               style={styles.postNowBtn}
               onPress={() => navigation.navigate('Post')}
+              activeOpacity={0.85}
             >
               <Text style={styles.postNowText}>➕ Post Your First Hustle</Text>
             </TouchableOpacity>
@@ -370,7 +572,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                   Funds held safely until verified campus meetup & delivery
                 </Text>
               </View>
-              {loadingOrders && <ActivityIndicator size="small" color="#059669" />}
+              {loadingOrders && <ActivityIndicator size="small" color={colors.primary} />}
             </View>
 
             {orders.length === 0 ? (
@@ -457,52 +659,68 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
   },
   header: {
-    backgroundColor: '#059669',
-    padding: 16,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    ...shadows.card,
   },
   headerTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: colors.textPrimary,
+    letterSpacing: -0.5,
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
+    fontWeight: '500',
   },
   logoutBtn: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    backgroundColor: colors.dangerLight,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FECACA',
   },
   logoutText: {
-    color: '#FFFFFF',
+    color: colors.danger,
     fontSize: 12,
     fontWeight: '700',
   },
   content: {
     padding: 16,
-    paddingBottom: 30,
+    paddingBottom: 40,
   },
   profileCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 16,
-    padding: 18,
+    padding: 20,
     alignItems: 'center',
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.borderLight,
+    ...shadows.card,
   },
   avatarBig: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: '#059669',
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
+    ...shadows.fab,
   },
   avatarLetter: {
     color: '#FFFFFF',
@@ -512,28 +730,30 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#0F172A',
+    color: colors.textPrimary,
   },
   userEmail: {
-    fontSize: 12,
-    color: '#059669',
+    fontSize: 13,
+    color: colors.primary,
     fontWeight: '700',
-    marginTop: 1,
+    marginTop: 2,
   },
   userProgram: {
     fontSize: 13,
-    color: '#64748B',
-    marginTop: 2,
+    color: colors.textSecondary,
+    marginTop: 3,
   },
   locationBadge: {
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    backgroundColor: colors.busyBg,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
     borderRadius: 12,
-    marginTop: 8,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
   },
   locationText: {
-    color: '#92400E',
+    color: colors.busyText,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -544,63 +764,65 @@ const styles = StyleSheet.create({
   },
   statBox: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     padding: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.borderLight,
+    ...shadows.card,
   },
   statNumber: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '800',
-    color: '#059669',
+    color: colors.primary,
   },
   statLabel: {
     fontSize: 12,
-    color: '#64748B',
+    color: colors.textSecondary,
     fontWeight: '600',
     marginTop: 2,
   },
   roadmapCard: {
-    backgroundColor: '#ECFDF5',
+    backgroundColor: colors.availableBg,
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#A7F3D0',
+    borderColor: colors.primaryMintBorder,
     marginBottom: 20,
   },
   roadmapTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
-    color: '#047857',
+    color: colors.primary,
     marginBottom: 4,
   },
   roadmapText: {
     fontSize: 12,
-    color: '#065F46',
-    lineHeight: 17,
+    color: colors.primaryDark,
+    lineHeight: 18,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#0F172A',
+    color: colors.textPrimary,
     marginBottom: 12,
   },
   myHustleCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
-    padding: 10,
+    padding: 12,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.borderLight,
+    ...shadows.card,
   },
   myHustleThumb: {
-    width: 50,
-    height: 50,
-    borderRadius: 8,
+    width: 52,
+    height: 52,
+    borderRadius: 10,
     marginRight: 12,
   },
   myHustleInfo: {
@@ -621,24 +843,24 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   statusPillOpen: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: colors.availableBg,
   },
   statusPillBusy: {
-    backgroundColor: '#FEF9C3',
+    backgroundColor: colors.busyBg,
   },
   statusDotMini: {
     fontSize: 8,
   },
   dotOpen: {
-    color: '#16A34A',
+    color: colors.primary,
   },
   dotBusy: {
-    color: '#CA8A04',
+    color: colors.busyDot,
   },
   statusTextMini: {
     fontSize: 9,
     fontWeight: '800',
-    color: '#334155',
+    color: colors.textSecondary,
   },
   deliveryModeMini: {
     fontSize: 12,
@@ -646,17 +868,17 @@ const styles = StyleSheet.create({
   myHustleTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.textPrimary,
   },
   myHustlePrice: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#059669',
+    color: colors.primary,
     marginTop: 2,
   },
   myHustleHostel: {
     fontSize: 11,
-    color: '#64748B',
+    color: colors.textSecondary,
   },
   deleteBtn: {
     padding: 8,
@@ -666,18 +888,24 @@ const styles = StyleSheet.create({
   },
   emptyContainer: {
     alignItems: 'center',
-    padding: 20,
+    padding: 24,
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    marginBottom: 16,
   },
   emptyText: {
     fontSize: 14,
-    color: '#64748B',
+    color: colors.textSecondary,
     marginBottom: 12,
   },
   postNowBtn: {
-    backgroundColor: '#059669',
+    backgroundColor: colors.primary,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 10,
+    ...shadows.fab,
   },
   postNowText: {
     color: '#FFFFFF',
@@ -688,31 +916,43 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    padding: 28,
+  },
+  loggedOutIconBox: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   loggedOutIcon: {
-    fontSize: 56,
-    marginBottom: 12,
+    fontSize: 44,
   },
   loggedOutTitle: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#0F172A',
+    color: colors.textPrimary,
     marginBottom: 8,
     textAlign: 'center',
   },
   loggedOutSub: {
     fontSize: 13,
-    color: '#64748B',
+    color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 19,
-    marginBottom: 20,
+    lineHeight: 20,
+    marginBottom: 24,
+    maxWidth: 300,
   },
   loginNowBtn: {
-    backgroundColor: '#059669',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 22,
+    paddingVertical: 14,
+    borderRadius: 14,
+    ...shadows.fab,
   },
   loginNowText: {
     color: '#FFFFFF',
@@ -723,7 +963,7 @@ const styles = StyleSheet.create({
   ordersSection: {
     marginTop: 24,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: colors.borderLight,
     paddingTop: 18,
     marginBottom: 20,
   },
@@ -735,35 +975,32 @@ const styles = StyleSheet.create({
   },
   ordersSub: {
     fontSize: 12,
-    color: '#64748B',
+    color: colors.textSecondary,
     marginTop: 2,
   },
   emptyOrdersCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    padding: 18,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.borderLight,
     alignItems: 'center',
+    ...shadows.card,
   },
   emptyOrdersText: {
     fontSize: 13,
-    color: '#64748B',
+    color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: 19,
   },
   orderCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     padding: 14,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 2,
+    borderColor: colors.borderLight,
+    ...shadows.card,
   },
   orderCardHeader: {
     flexDirection: 'row',
@@ -774,12 +1011,12 @@ const styles = StyleSheet.create({
   orderSeller: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#0F172A',
+    color: colors.textPrimary,
   },
   orderAmount: {
     fontSize: 16,
     fontWeight: '900',
-    color: '#059669',
+    color: colors.primary,
     marginTop: 2,
   },
   escrowBadge: {
@@ -788,23 +1025,23 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   escrowBadgeHeld: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: colors.busyBg,
   },
   escrowBadgeReleased: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: colors.availableBg,
   },
   escrowBadgeText: {
     fontSize: 10,
     fontWeight: '800',
   },
   escrowBadgeTextHeld: {
-    color: '#B45309',
+    color: colors.busyText,
   },
   escrowBadgeTextReleased: {
-    color: '#15803D',
+    color: colors.availableText,
   },
   orderMeetupRow: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -812,7 +1049,7 @@ const styles = StyleSheet.create({
   },
   orderMeetupText: {
     fontSize: 12,
-    color: '#334155',
+    color: colors.textSecondary,
   },
   orderMetaRow: {
     flexDirection: 'row',
@@ -822,23 +1059,188 @@ const styles = StyleSheet.create({
   },
   orderRef: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: colors.textMuted,
     fontWeight: '600',
   },
   orderDate: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: colors.textMuted,
   },
   releaseBtn: {
-    backgroundColor: '#059669',
-    paddingVertical: 10,
+    backgroundColor: colors.primary,
+    paddingVertical: 11,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
+    ...shadows.fab,
   },
   releaseBtnText: {
     color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 13,
   },
+  // Payout Destination Styles
+  payoutCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    marginBottom: 20,
+    ...shadows.card,
+  },
+  payoutHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  payoutSectionTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.textPrimary,
+  },
+  payoutSectionSubtitle: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  payoutBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  payoutBadgeVerified: {
+    backgroundColor: colors.availableBg,
+    borderWidth: 1,
+    borderColor: colors.primaryMintBorder,
+  },
+  payoutBadgePending: {
+    backgroundColor: colors.busyBg,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  payoutBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  payoutBadgeTextVerified: {
+    color: colors.availableText,
+  },
+  payoutBadgeTextPending: {
+    color: colors.busyText,
+  },
+  payoutDetailsBox: {
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 10,
+    padding: 12,
+  },
+  payoutInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  payoutInfoLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  payoutInfoValue: {
+    fontSize: 12,
+    color: colors.textPrimary,
+    fontWeight: '700',
+  },
+  configurePayoutBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  configurePayoutBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  payoutFormBox: {
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 10,
+    padding: 12,
+  },
+  formInputLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  networkSelectorRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+  },
+  networkOption: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    alignItems: 'center',
+  },
+  networkOptionSelected: {
+    backgroundColor: colors.availableBg,
+    borderColor: colors.primary,
+  },
+  networkOptionText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  networkOptionTextSelected: {
+    color: colors.primary,
+  },
+  payoutInput: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: colors.textPrimary,
+    marginBottom: 6,
+  },
+  formActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+  },
+  cancelPayoutBtn: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  cancelPayoutBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  savePayoutBtn: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  savePayoutBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
 });
+

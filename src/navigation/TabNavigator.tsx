@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, View, StyleSheet, TouchableOpacity } from 'react-native';
+import { Text, View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -10,6 +10,7 @@ import { HustleDetailScreen } from '../screens/HustleDetailScreen';
 import { PostHustleScreen } from '../screens/PostHustleScreen';
 import { FavoritesScreen } from '../screens/FavoritesScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
+import { colors, shadows } from '../theme/colors';
 
 const Tab = createBottomTabNavigator();
 const HomeStack = createNativeStackNavigator();
@@ -49,44 +50,47 @@ export function TabNavigator() {
       <Tab.Navigator
         screenOptions={({ route }) => ({
           headerShown: false,
-          tabBarActiveTintColor: '#059669', // Emerald Green from Figma
+          tabBarActiveTintColor: colors.primary, // #0D6535 Forest Green from Figma
           tabBarInactiveTintColor: '#94A3B8',
           tabBarStyle: styles.tabBar,
           tabBarLabelStyle: styles.tabLabel,
           tabBarIcon: ({ focused }) => {
-            let iconName = '🏠';
-            if (route.name === 'Home') iconName = '🏠';
-            else if (route.name === 'Explore') iconName = '🧭';
-            else if (route.name === 'Post') return null; // Handled by custom button
-            else if (route.name === 'Favorites') iconName = focused ? '❤️' : '🤍';
-            else if (route.name === 'Profile') iconName = '👤';
+            let iconGlyph = '🏠';
+            if (route.name === 'Home') iconGlyph = '🏠';
+            else if (route.name === 'Explore') iconGlyph = '🧭';
+            else if (route.name === 'Post') return null; // Rendered by central FAB
+            else if (route.name === 'Favorites') iconGlyph = focused ? '🔖' : '🏷️';
+            else if (route.name === 'Profile') iconGlyph = '👤';
 
             return (
               <View style={styles.iconContainer}>
-                <Text style={{ fontSize: focused ? 18 : 16 }}>{iconName}</Text>
+                <Text style={{ fontSize: focused ? 18 : 16 }}>{iconGlyph}</Text>
                 {focused && <View style={styles.activeBar} />}
               </View>
             );
           },
         })}
       >
-        <Tab.Screen name="Home" component={HomeStackScreen} options={{ tabBarLabel: 'Feed' }} />
+        <Tab.Screen name="Home" component={HomeStackScreen} options={{ tabBarLabel: 'Home' }} />
         <Tab.Screen name="Explore" component={ExploreStackScreen} options={{ tabBarLabel: 'Explore' }} />
-        
-        {/* Central Big Elevated Floating Green '+' Post Button */}
+
+        {/* Central Prominent Forest Green Floating '+' Post Button (Figma) */}
         <Tab.Screen
           name="Post"
           component={PostHustleScreen}
           options={{
             tabBarLabel: 'Post',
             tabBarButton: (props) => (
-              <TouchableOpacity
-                style={styles.floatingPostBtn}
-                onPress={props.onPress}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.plusIcon}>+</Text>
-              </TouchableOpacity>
+              <View style={styles.fabWrapper}>
+                <TouchableOpacity
+                  style={styles.floatingPostBtn}
+                  onPress={props.onPress}
+                  activeOpacity={0.88}
+                >
+                  <Text style={styles.plusIcon}>+</Text>
+                </TouchableOpacity>
+                <Text style={styles.fabLabel}>Post</Text>
+              </View>
             ),
           }}
         />
@@ -100,12 +104,12 @@ export function TabNavigator() {
 
 const styles = StyleSheet.create({
   tabBar: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    height: 62,
-    paddingBottom: 8,
-    paddingTop: 6,
+    borderTopColor: colors.borderLight,
+    height: Platform.OS === 'ios' ? 72 : 64,
+    paddingBottom: Platform.OS === 'ios' ? 14 : 8,
+    paddingTop: 8,
     elevation: 8,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: -2 },
@@ -114,7 +118,8 @@ const styles = StyleSheet.create({
   },
   tabLabel: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '800',
+    marginTop: 2,
   },
   iconContainer: {
     alignItems: 'center',
@@ -123,28 +128,34 @@ const styles = StyleSheet.create({
   activeBar: {
     width: 14,
     height: 3,
-    backgroundColor: '#059669', // Emerald Green indicator bar
+    backgroundColor: colors.primary, // #0D6535
     borderRadius: 2,
-    marginTop: 2,
+    marginTop: 3,
+  },
+  fabWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    top: -14,
   },
   floatingPostBtn: {
-    top: -16,
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#059669', // Big Emerald Green Floating '+' Button from Figma
+    width: 48,
+    height: 48,
+    borderRadius: 16, // Rounded square/pill matching Figma
+    backgroundColor: colors.primary, // #0D6535
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#059669',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
-    elevation: 6,
+    ...shadows.fab,
   },
   plusIcon: {
-    color: '#FFFFFF',
-    fontSize: 28,
-    fontWeight: '400',
+    color: colors.textWhite,
+    fontSize: 26,
+    fontWeight: '500',
     marginTop: -2,
+  },
+  fabLabel: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: colors.primary,
+    marginTop: 2,
   },
 });

@@ -42,12 +42,12 @@ export const CAMPUS_METADATA: Record<CampusId, CampusMetadata> = {
 
 export const CATEGORIES: CategoryOption[] = [
   { id: 'all', label: 'All', icon: '🔥' },
-  { id: 'tutoring', label: 'Tutoring', icon: '📚' },
-  { id: 'tech_repair', label: 'Tech Fix', icon: '💻' },
-  { id: 'photo_video', label: 'Media', icon: '📸' },
-  { id: 'food_delivery', label: 'Food', icon: '🍕' },
-  { id: 'fashion_beauty', label: 'Beauty', icon: '💅' },
-  { id: 'laundry_errands', label: 'Clean', icon: '🧺' },
+  { id: 'tutoring', label: 'Tutoring', icon: '📖' },
+  { id: 'tech_repair', label: 'Tech', icon: '💻' },
+  { id: 'food_delivery', label: 'Food', icon: '🍽️' },
+  { id: 'photo_video', label: 'Photo', icon: '📷' },
+  { id: 'fashion_beauty', label: 'Beauty', icon: '✂️' },
+  { id: 'laundry_errands', label: 'Errands', icon: '📦' },
   { id: 'custom', label: 'Crafts', icon: '🎨' },
 ];
 

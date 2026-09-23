@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { CAMPUS_LOCATIONS, CAMPUS_METADATA } from '../data/mockData';
 import { useHustleContext } from '../context/HustleContext';
+import { colors, shadows } from '../theme/colors';
 
 export const LocationFilter: React.FC = () => {
   const { selectedLocation, setSelectedLocation, selectedCampus } = useHustleContext();
@@ -29,9 +30,9 @@ export const LocationFilter: React.FC = () => {
         >
           <Text style={styles.pinIcon}>📍</Text>
           <Text style={[styles.btnText, isFiltered && styles.activeBtnText]} numberOfLines={1}>
-            {isFiltered ? selectedLocation : `Filter by ${campusName} Hostel / Area`}
+            {isFiltered ? selectedLocation : `Filter by Hostel / Area`}
           </Text>
-          <Text style={styles.arrowIcon}>▼</Text>
+          <Text style={styles.arrowIcon}>˅</Text>
         </TouchableOpacity>
 
         {isFiltered && (
@@ -52,8 +53,8 @@ export const LocationFilter: React.FC = () => {
             <TouchableWithoutFeedback>
               <View style={styles.dropdownMenu}>
                 <View style={styles.menuHeader}>
-                  <Text style={styles.menuTitle}>Select {campusName} Hostel / Area</Text>
-                  <TouchableOpacity onPress={() => setModalVisible(false)}>
+                  <Text style={styles.menuTitle}>📍 Select {campusName} Hostel / Area</Text>
+                  <TouchableOpacity onPress={() => setModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                     <Text style={styles.closeBtn}>✕</Text>
                   </TouchableOpacity>
                 </View>
@@ -69,6 +70,7 @@ export const LocationFilter: React.FC = () => {
                           setSelectedLocation(loc);
                           setModalVisible(false);
                         }}
+                        activeOpacity={0.7}
                       >
                         <Text style={[styles.menuItemText, isSelected && styles.selectedMenuItemText]}>
                           {loc === 'All Locations' ? `📍 All ${campusName} Locations` : `📍 ${loc}`}
@@ -90,7 +92,7 @@ export const LocationFilter: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 16,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   dropdownBtnRow: {
     flexDirection: 'row',
@@ -101,66 +103,64 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 14,
     paddingHorizontal: 14,
-    paddingVertical: 11,
+    paddingVertical: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
   },
   activeDropdownBtn: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#059669',
+    backgroundColor: colors.primaryMint,
+    borderColor: colors.primary,
   },
   pinIcon: {
-    fontSize: 14,
+    fontSize: 13,
     marginRight: 6,
   },
   btnText: {
     flex: 1,
     fontSize: 13,
     fontWeight: '700',
-    color: '#334155',
+    color: colors.textSecondary,
   },
   activeBtnText: {
-    color: '#059669',
+    color: colors.primary,
   },
   arrowIcon: {
-    fontSize: 10,
-    color: '#64748B',
+    fontSize: 13,
+    color: colors.textSecondary,
     marginLeft: 4,
+    fontWeight: '800',
   },
   clearChip: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: colors.busyBg,
     borderWidth: 1,
     borderColor: '#FDE68A',
     paddingHorizontal: 10,
-    paddingVertical: 10,
+    paddingVertical: 9,
     borderRadius: 12,
   },
   clearChipText: {
-    color: '#D97706',
-    fontSize: 12,
+    color: colors.busyText,
+    fontSize: 11.5,
     fontWeight: '800',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.4)',
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
   dropdownMenu: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    backgroundColor: colors.surface,
+    borderRadius: 22,
     width: '100%',
-    maxHeight: 380,
-    padding: 16,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 5,
+    maxWidth: 380,
+    maxHeight: 400,
+    padding: 18,
+    ...shadows.cardHover,
   },
   menuHeader: {
     flexDirection: 'row',
@@ -168,45 +168,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: colors.borderLight,
     marginBottom: 8,
   },
   menuTitle: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#0F172A',
+    color: colors.textPrimary,
   },
   closeBtn: {
     fontSize: 16,
-    color: '#64748B',
+    color: colors.textMuted,
     fontWeight: '700',
     padding: 4,
   },
   menuList: {
-    maxHeight: 300,
+    maxHeight: 310,
   },
   menuItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 12,
-    paddingHorizontal: 10,
-    borderRadius: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    marginBottom: 4,
   },
   selectedMenuItem: {
-    backgroundColor: '#ECFDF5',
+    backgroundColor: colors.primaryMint,
   },
   menuItemText: {
     fontSize: 14,
-    color: '#334155',
+    color: colors.textPrimary,
     fontWeight: '600',
   },
   selectedMenuItemText: {
-    color: '#059669',
+    color: colors.primary,
     fontWeight: '800',
   },
   checkmark: {
-    color: '#059669',
+    color: colors.primary,
     fontSize: 16,
     fontWeight: '900',
   },
