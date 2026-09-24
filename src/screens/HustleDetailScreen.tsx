@@ -15,17 +15,18 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useHustleContext } from '../context/HustleContext';
 import {
-  initializeMoMoPayment,
   formatGhanaPhoneNumber,
   fetchHustleReviewsApi,
   submitHustleReviewApi,
   toggleHustleStatusApi,
+  fetchHustleByIdApi,
 } from '../services/api';
-import { getHustleImageUrl } from '../utils/imageHelper';
+import { DEFAULT_HUSTLE_IMAGE, getHustleImageUrl } from '../utils/imageHelper';
 import { CAMPUS_METADATA } from '../data/mockData';
-import { Review } from '../types';
+import { Hustle, Review } from '../types';
 import { colors, shadows } from '../theme/colors';
 
 const showAlert = (title: string, message: string, onOk?: () => void) => {
@@ -57,46 +58,13 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
     updateHustleRating,
   } = useHustleContext();
 
-  const hustle = hustles.find((h) => h.id === hustleId);
+  const listedHustle = hustles.find((h) => h.id === hustleId);
+  const [remoteHustle, setRemoteHustle] = useState<Hustle | null>(null);
+  const [isLoadingHustle, setIsLoadingHustle] = useState(!listedHustle);
+  const hustle = listedHustle || remoteHustle;
   const favorite = isFavorite(hustleId);
 
   const campusInfo = CAMPUS_METADATA[hustle?.campus || 'knust'] || CAMPUS_METADATA.knust;
-
-  const campusMeetupSpots: Record<string, string[]> = {
-    knust: [
-      '🏛️ CCB Ground Floor (Commercial Bank)',
-      '📚 Main Library Forecourt',
-      '🏪 Brunei Complex Market',
-      '🏢 Traditional Hall Porter’s Lodge',
-      '🍽️ Royal Parade Grounds',
-      '🏠 Private Hostel Room',
-    ],
-    ug_legon: [
-      '📚 Balme Library Forecourt',
-      '🌙 Night Market Hub',
-      '☕ Central Cafeteria',
-      '🏢 Pentagon Porter’s Lodge',
-      '🎓 JQB Forecourt',
-      '🏠 Private Hostel Room',
-    ],
-    ucc: [
-      '📚 Sam Jonah Library Forecourt',
-      '🔬 Science Quadrangle',
-      '🏟️ Casford Field & Pavilion',
-      '🏢 Oguaa Hall Porter’s Lodge',
-      '🌴 Amamoma Junction Hub',
-      '🏠 Private Hostel Room',
-    ],
-  };
-
-  const availableMeetupSpots =
-    campusMeetupSpots[hustle?.campus || 'knust'] || campusMeetupSpots.knust;
-
-  const [paymentModalVisible, setPaymentModalVisible] = useState(false);
-  const [buyerEmail, setBuyerEmail] = useState(user?.email || `student@${campusInfo.domain}`);
-  const [momoNumber, setMomoNumber] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [selectedMeetupSpot, setSelectedMeetupSpot] = useState(availableMeetupSpots[0]);
 
   // Reviews State
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -107,10 +75,32 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
 
   // Status Toggle State
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [bannerUri, setBannerUri] = useState<string>(DEFAULT_HUSTLE_IMAGE);
+
+  useEffect(() => {
+    if (listedHustle) {
+      setRemoteHustle(listedHustle);
+      setIsLoadingHustle(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingHustle(true);
+    fetchHustleByIdApi(hustleId)
+      .then((data) => {
+        if (!cancelled) setRemoteHustle(data);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingHustle(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hustleId, listedHustle]);
 
   useEffect(() => {
     if (!hustle) return;
-    // Fetch live reviews from PostgreSQL backend (no mock fallback)
     fetchHustleReviewsApi(hustle.id)
       .then((liveReviews) => {
         setReviews(liveReviews || []);
@@ -118,7 +108,21 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
       .catch(() => {
         setReviews([]);
       });
-  }, [hustleId]);
+  }, [hustleId, hustle?.id]);
+
+  useEffect(() => {
+    if (!hustle) return;
+    setBannerUri(getHustleImageUrl(hustle.imageUrl, hustle.category, hustle.title));
+  }, [hustle?.imageUrl, hustle?.category, hustle?.title]);
+
+  if (isLoadingHustle && !hustle) {
+    return (
+      <SafeAreaView style={styles.notFoundContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.notFoundText, { marginTop: 12 }]}>Loading service…</Text>
+      </SafeAreaView>
+    );
+  }
 
   if (!hustle) {
     return (
@@ -134,36 +138,28 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
   const isOwner = Boolean(user && hustle.sellerId && hustle.sellerId === user.id);
   const status = hustle.status || 'OPEN';
 
-  const [bannerUri, setBannerUri] = useState<string>(() =>
-    getHustleImageUrl(hustle.imageUrl, hustle.category, hustle.title)
-  );
-
-  useEffect(() => {
-    setBannerUri(getHustleImageUrl(hustle.imageUrl, hustle.category, hustle.title));
-  }, [hustle.imageUrl, hustle.category, hustle.title]);
-
-  const deliveryDescriptions: Record<string, { label: string; icon: string; detail: string; tag: string }> = {
+  const deliveryDescriptions: Record<string, { label: string; icon: keyof typeof Ionicons.glyphMap; detail: string; tag: string }> = {
     to_client: {
       label: 'Hostel Room Service (I come to you)',
-      icon: '🏠',
-      detail: 'Seller will travel to your room/hostel anywhere on campus or Ayeduase/Kotei/Brunei.',
+      icon: 'send-outline',
+      detail: 'Seller will travel to your room/hostel anywhere on campus or hostel area.',
       tag: 'Hostel Delivery',
     },
     at_seller: {
       label: `Client Visits Seller's Room (${hustle.hostelLocation})`,
-      icon: '📍',
+      icon: 'home-outline',
       detail: `You will visit the seller at their room/hostel in ${hustle.hostelLocation}.`,
       tag: 'At Seller Room',
     },
     campus_spot: {
       label: 'Campus Public Spot Meeting',
-      icon: '🎓',
+      icon: 'people-outline',
       detail: 'Meet at verified safe campus hubs like CCB, Main Library, or Brunei Market.',
       tag: 'Campus Spot',
     },
     remote: {
       label: 'Remote / Online Delivery',
-      icon: '💻',
+      icon: 'wifi-outline',
       detail: 'Completed digitally via WhatsApp, Zoom, Google Drive, or email.',
       tag: 'Online/Remote',
     },
@@ -286,56 +282,6 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
       });
   };
 
-  const handleInitiateMoMoPayment = async () => {
-    if (!momoNumber.trim() || momoNumber.length < 9) {
-      showAlert('Invalid Number', 'Please enter a valid Ghana Mobile Money phone number (e.g. 0241234567).');
-      return;
-    }
-
-    if (!token || !user) {
-      showAlert('Sign In Required', 'Please sign in to your student account to place orders and check out securely.', () => {
-        setPaymentModalVisible(false);
-        setAuthModalVisible(true);
-      });
-      return;
-    }
-
-    setIsProcessing(true);
-    try {
-      const response = await initializeMoMoPayment(
-        {
-          hustleId: hustle.id,
-          momoNumber,
-          paymentMethod: 'mtn_momo',
-          meetupSpot: selectedMeetupSpot,
-        },
-        token
-      );
-
-      setPaymentModalVisible(false);
-      setIsProcessing(false);
-
-      const authUrl = response?.data?.authorizationUrl;
-
-      showAlert(
-        '🛡️ Campus Escrow Protected!',
-        `A payment request for GH₵ ${hustle.price} has been initiated for ${momoNumber}.\n\n📍 Meetup Location: ${selectedMeetupSpot}\nReference: ${response.data.reference}\n\nClick OK to open the secure Paystack checkout portal and complete your payment!`,
-        () => {
-          if (authUrl) {
-            if (Platform.OS === 'web' && typeof window !== 'undefined') {
-              window.location.href = authUrl;
-            } else {
-              Linking.openURL(authUrl);
-            }
-          }
-        }
-      );
-    } catch (error: any) {
-      setIsProcessing(false);
-      showAlert('Payment Error', error.message || 'Unable to connect to MoMo gateway.');
-    }
-  };
-
   const handleShare = async () => {
     try {
       const shareData = {
@@ -382,7 +328,7 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
               onPress={handleShare}
               activeOpacity={0.8}
             >
-              <Text style={styles.topNavIcon}>🔗</Text>
+              <Ionicons name="share-social-outline" size={18} color="#0F172A" />
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -390,7 +336,11 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
               onPress={() => toggleFavorite(hustle.id)}
               activeOpacity={0.8}
             >
-              <Text style={styles.topNavIcon}>{favorite ? '❤️' : '🤍'}</Text>
+              <Ionicons
+                name={favorite ? 'heart' : 'heart-outline'}
+                size={18}
+                color={favorite ? '#EF4444' : '#0F172A'}
+              />
             </TouchableOpacity>
           </View>
         </View>
@@ -400,7 +350,7 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
           {/* Status & Availability Banner */}
           <View style={[styles.statusBanner, status === 'OPEN' ? styles.statusBannerOpen : styles.statusBannerBusy]}>
             <View style={styles.statusBannerLeft}>
-              <Text style={[styles.statusDot, status === 'OPEN' ? styles.statusDotOpen : styles.statusDotBusy]}>●</Text>
+              <View style={[styles.statusDot, status === 'OPEN' ? styles.statusDotOpen : styles.statusDotBusy]} />
               <View>
                 <Text style={styles.statusBannerTitle}>
                   {status === 'OPEN' ? 'Available for Bookings' : 'Currently Busy with Lectures/Exams'}
@@ -430,7 +380,8 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
           {/* Location & Category Badges */}
           <View style={styles.badgeRow}>
             <View style={styles.hostelBadge}>
-              <Text style={styles.hostelBadgeText}>📍 {hustle.hostelLocation}</Text>
+              <Ionicons name="location-outline" size={13} color="#475569" style={{ marginRight: 4 }} />
+              <Text style={styles.hostelBadgeText}>{hustle.hostelLocation}</Text>
             </View>
             <View style={styles.campusTag}>
               <Text style={styles.campusTagText}>{campusInfo.shortName} {campusInfo.city}</Text>
@@ -458,7 +409,10 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
             </View>
 
             <View style={styles.ratingBox}>
-              <Text style={styles.starBig}>⭐ {hustle.rating.toFixed(1)}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Ionicons name="star" size={15} color="#F59E0B" />
+                <Text style={styles.starBig}>{Number(hustle.rating || 0).toFixed(1)}</Text>
+              </View>
               <Text style={styles.reviewSubText}>{hustle.reviewCount} student reviews</Text>
             </View>
           </View>
@@ -466,7 +420,9 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
           {/* Delivery & Meeting Mode Card */}
           <View style={styles.deliveryCard}>
             <View style={styles.deliveryCardHeader}>
-              <Text style={styles.deliveryCardIcon}>{delivery.icon}</Text>
+              <View style={styles.deliveryIconWrapper}>
+                <Ionicons name={delivery.icon} size={20} color={colors.primary} />
+              </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.deliveryCardTitle}>{delivery.label}</Text>
                 <Text style={styles.deliveryCardDetail}>{delivery.detail}</Text>
@@ -483,9 +439,13 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
               <Text style={styles.sellerTitle}>{hustle.sellerName}</Text>
               <Text style={styles.sellerSub}>{hustle.sellerProgram}</Text>
               <Text style={styles.sellerHostel}>Based in {hustle.hostelLocation}</Text>
+              {hustle.momoNumber ? (
+                <Text style={styles.sellerHostel}>MoMo: {hustle.momoNumber} (pay the seller directly)</Text>
+              ) : null}
             </View>
             <View style={styles.verifiedBadge}>
-              <Text style={styles.verifiedText}>🎓 Verified Student</Text>
+              <Ionicons name="school-outline" size={13} color={colors.primary} style={{ marginRight: 4 }} />
+              <Text style={styles.verifiedText}>Verified Student</Text>
             </View>
           </View>
 
@@ -504,9 +464,9 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
 
           {/* Safety Notice */}
           <View style={styles.safetyBox}>
-            <Text style={styles.safetyIcon}>💡</Text>
+            <Ionicons name="shield-checkmark-outline" size={18} color={colors.primary} style={{ marginRight: 8 }} />
             <Text style={styles.safetyText}>
-              Meet in public campus spots (CCB, Library, Hostel Lounge) when ordering or receiving services. Pay via MoMo or Cash upon satisfaction!
+              Meet in a public campus spot. Agree the price on WhatsApp, then pay the seller directly with MoMo or cash when you are satisfied.
             </Text>
           </View>
 
@@ -515,9 +475,12 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
             <View style={styles.reviewsHeaderRow}>
               <View>
                 <Text style={styles.sectionHeader}>Classmate Reviews</Text>
-                <Text style={styles.reviewsSub}>
-                  ⭐ {hustle.rating.toFixed(1)} avg from {reviews.length} {reviews.length === 1 ? 'review' : 'reviews'}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                  <Ionicons name="star" size={13} color="#F59E0B" style={{ marginRight: 4 }} />
+                  <Text style={styles.reviewsSub}>
+                    {hustle.rating.toFixed(1)} avg from {reviews.length} {reviews.length === 1 ? 'review' : 'reviews'}
+                  </Text>
+                </View>
               </View>
 
               <TouchableOpacity
@@ -525,14 +488,17 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
                 onPress={handleOpenReviewModal}
                 activeOpacity={0.85}
               >
-                <Text style={styles.leaveReviewBtnText}>⭐ Write Review</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Ionicons name="create-outline" size={13} color={colors.primary} />
+                  <Text style={styles.leaveReviewBtnText}>Write Review</Text>
+                </View>
               </TouchableOpacity>
             </View>
 
             {reviews.length === 0 ? (
               <View style={styles.emptyReviews}>
                 <Text style={styles.emptyReviewsText}>
-                  No reviews yet. Be the first classmate to review {hustle.sellerName}'s work!
+                  No reviews yet. Be the first classmate to review {hustle.sellerName}'s work.
                 </Text>
               </View>
             ) : (
@@ -547,7 +513,8 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
                         <Text style={styles.reviewerName}>{rev.reviewerName}</Text>
                         {rev.isVerifiedPurchase && (
                           <View style={styles.verifiedReviewBadge}>
-                            <Text style={styles.verifiedReviewBadgeText}>✓ Verified Purchase</Text>
+                            <Ionicons name="checkmark-circle" size={11} color="#15803D" style={{ marginRight: 3 }} />
+                            <Text style={styles.verifiedReviewBadgeText}>Verified Purchase</Text>
                           </View>
                         )}
                       </View>
@@ -555,9 +522,12 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
                     </View>
                     <View style={styles.starsRow}>
                       {[1, 2, 3, 4, 5].map((s) => (
-                        <Text key={s} style={{ fontSize: 13, color: s <= rev.rating ? '#F59E0B' : '#CBD5E1' }}>
-                          ★
-                        </Text>
+                        <Ionicons
+                          key={s}
+                          name="star"
+                          size={12}
+                          color={s <= rev.rating ? '#F59E0B' : '#CBD5E1'}
+                        />
                       ))}
                     </View>
                   </View>
@@ -569,133 +539,24 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
         </View>
       </ScrollView>
 
-      {/* Floating Action Bar with WhatsApp + MoMo Payment */}
       <View style={styles.actionBar}>
-        <TouchableOpacity
-          style={styles.payMomoButton}
-          onPress={() => {
-            if (!user || !token) {
-              showAlert('Student Login Required', 'Please sign in to your student account to check out with Campus Escrow protection.', () => {
-                setAuthModalVisible(true);
-              });
-              return;
-            }
-            setPaymentModalVisible(true);
-          }}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.payMomoIcon}>💳</Text>
-          <Text style={styles.payMomoText}>Pay GH₵ {hustle.price}</Text>
-        </TouchableOpacity>
-
         <TouchableOpacity
           style={styles.whatsAppButton}
           onPress={handleWhatsAppChat}
           activeOpacity={0.85}
         >
-          <Text style={styles.whatsAppIcon}>💬</Text>
-          <Text style={styles.whatsAppText}>Chat</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <Ionicons name="logo-whatsapp" size={18} color="#FFFFFF" />
+            <Text style={styles.whatsAppText}>Chat on WhatsApp · GH₵ {hustle.price}</Text>
+          </View>
         </TouchableOpacity>
       </View>
-
-      {/* MoMo Payment & Campus Escrow Modal */}
-      <Modal visible={paymentModalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <View style={styles.escrowHeaderBadge}>
-                <Text style={styles.escrowBadgeIcon}>🛡️</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.escrowBadgeTitle}>Campus Escrow Protection</Text>
-                  <Text style={styles.escrowBadgeSub}>
-                    Funds are held safely until service is delivered & verified.
-                  </Text>
-                </View>
-              </View>
-
-              <Text style={styles.modalTitle}>📱 Secure MoMo Checkout</Text>
-              <Text style={styles.modalSubtitle}>
-                Holding <Text style={{ fontWeight: '800', color: colors.primary }}>GH₵ {hustle.price}</Text> for {hustle.sellerName}
-              </Text>
-
-              {/* Safe Meetup Spot Selection */}
-              <View style={styles.modalInputGroup}>
-                <Text style={styles.modalLabel}>📍 Safe Campus Meetup Spot *</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.meetupScroll}>
-                  {availableMeetupSpots.map((spot) => {
-                    const isSelected = selectedMeetupSpot === spot;
-                    return (
-                      <TouchableOpacity
-                        key={spot}
-                        style={[styles.meetupChip, isSelected && styles.meetupChipActive]}
-                        onPress={() => setSelectedMeetupSpot(spot)}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={[styles.meetupChipText, isSelected && styles.meetupChipTextActive]}>
-                          {spot}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-
-              {/* Safety Checklist Box */}
-              <View style={styles.safetyChecklistBox}>
-                <Text style={styles.safetyChecklistTitle}>{campusInfo.shortName} Student Safety Checklist</Text>
-                <Text style={styles.safetyChecklistItem}>✓ Meet in public, well-lit campus spots</Text>
-                <Text style={styles.safetyChecklistItem}>✓ Inspect service/item before releasing payment</Text>
-                <Text style={styles.safetyChecklistItem}>✓ Release escrow funds in your Profile when satisfied</Text>
-              </View>
-
-              <View style={styles.modalInputGroup}>
-                <Text style={styles.modalLabel}>Student Email</Text>
-                <TextInput
-                  style={styles.modalInput}
-                  value={buyerEmail}
-                  onChangeText={setBuyerEmail}
-                />
-              </View>
-
-              <View style={styles.modalInputGroup}>
-                <Text style={styles.modalLabel}>MTN / Telecel MoMo Number *</Text>
-                <TextInput
-                  style={styles.modalInput}
-                  placeholder="e.g. 0241234567"
-                  keyboardType="phone-pad"
-                  value={momoNumber}
-                  onChangeText={setMomoNumber}
-                />
-              </View>
-
-              <View style={styles.modalBtnRow}>
-                <TouchableOpacity
-                  style={styles.modalCancelBtn}
-                  onPress={() => setPaymentModalVisible(false)}
-                >
-                  <Text style={styles.modalCancelText}>Cancel</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.modalSubmitBtn}
-                  onPress={handleInitiateMoMoPayment}
-                  disabled={isProcessing}
-                >
-                  <Text style={styles.modalSubmitText}>
-                    {isProcessing ? 'Sending Prompt...' : '🔒 Pay with Escrow'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
 
       {/* Write a Review Modal */}
       <Modal visible={reviewModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>⭐ Review {hustle.sellerName}</Text>
+            <Text style={styles.modalTitle}>Review {hustle.sellerName}</Text>
             <Text style={styles.modalSubtitle}>
               Share honest feedback about "{hustle.title}" to help fellow {campusInfo.shortName} students.
             </Text>
@@ -709,22 +570,24 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
                   style={styles.starPickerItem}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.starPickerText, star <= newRating && styles.starPickerActive]}>
-                    ★
-                  </Text>
+                  <Ionicons
+                    name="star"
+                    size={28}
+                    color={star <= newRating ? '#F59E0B' : '#E2E8F0'}
+                  />
                 </TouchableOpacity>
               ))}
             </View>
             <Text style={styles.ratingDescriptor}>
               {newRating === 5
-                ? 'Excellent / Highly Recommended! 🌟'
+                ? 'Excellent / Highly Recommended'
                 : newRating === 4
-                ? 'Very Good Service 👍'
+                ? 'Very Good Service'
                 : newRating === 3
-                ? 'Average / Decent ⚖️'
+                ? 'Average / Decent'
                 : newRating === 2
-                ? 'Needs Improvement ⚠️'
-                : 'Poor Experience ❌'}
+                ? 'Needs Improvement'
+                : 'Poor Experience'}
             </Text>
 
             {/* Comment Input */}
@@ -1032,13 +895,15 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   statusDot: {
-    fontSize: 14,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   statusDotOpen: {
-    color: '#16A34A',
+    backgroundColor: '#16A34A',
   },
   statusDotBusy: {
-    color: '#CA8A04',
+    backgroundColor: '#CA8A04',
   },
   statusBannerTitle: {
     fontSize: 13,
@@ -1076,6 +941,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  deliveryIconWrapper: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   deliveryCardIcon: {
     fontSize: 26,
@@ -1239,31 +1112,9 @@ const styles = StyleSheet.create({
     borderTopColor: colors.borderLight,
     padding: 14,
     paddingBottom: Platform.OS === 'ios' ? 24 : 14,
-    flexDirection: 'row',
-    gap: 10,
     ...shadows.cardHover,
   },
-  payMomoButton: {
-    flex: 1.4,
-    backgroundColor: colors.primary,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 14,
-    ...shadows.fab,
-  },
-  payMomoIcon: {
-    fontSize: 18,
-    marginRight: 6,
-  },
-  payMomoText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
-  },
   whatsAppButton: {
-    flex: 1,
     backgroundColor: '#25D366',
     flexDirection: 'row',
     justifyContent: 'center',

@@ -1,23 +1,39 @@
 {
   "expo": {
-    "name": "CampusHustle KNUST",
-    "slug": "campushustle-knust",
+    "name": "CampusHustle",
+    "slug": "campushustle",
+    "scheme": "campushustle",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "assetBundlePatterns": [
       "**/*"
     ],
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow CampusHustle to access your photos so you can upload pictures of your hustle."
+        }
+      ]
+    ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.campushustle.app",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Allow CampusHustle to access your photos so you can upload pictures of your hustle."
+      }
     },
     "android": {
+      "package": "com.campushustle.app",
       "adaptiveIcon": {
         "backgroundColor": "#059669"
       }
     },
     "web": {
-      "bundler": "metro"
+      "bundler": "metro",
+      "name": "CampusHustle",
+      "shortName": "CampusHustle"
     }
   }
 }

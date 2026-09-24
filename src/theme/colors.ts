@@ -3,12 +3,12 @@
 // ==============================================================================
 
 export const colors = {
-  // Brand Primary
-  primary: '#0D6535',       // Campus Forest Green (Main Brand from Figma)
-  primaryDark: '#084323',   // Deep green for active pressed states
-  primaryLight: '#15803D',  // Medium forest green
-  primaryMint: '#DCFCE7',   // Available status / soft green tint
-  primaryMintBorder: '#BBF7D0',
+  // Brand Primary (Emerald Green matching Figma UI screenshots)
+  primary: '#059669',       // Vibrant Emerald Green
+  primaryDark: '#047857',   // Deep green for active pressed states
+  primaryLight: '#10B981',  // Light vibrant green
+  primaryMint: '#ECFDF5',   // Soft green tint
+  primaryMintBorder: '#A7F3D0',
 
   // Status & Badges
   availableBg: '#DCFCE7',
@@ -44,7 +44,6 @@ export const colors = {
   textWhite: '#FFFFFF',
 
   // Accents
-  escrowGold: '#F59E0B',
   ratingStar: '#F59E0B',
   danger: '#EF4444',
   dangerLight: '#FEE2E2',

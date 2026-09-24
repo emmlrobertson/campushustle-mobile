@@ -4,87 +4,105 @@ import {
   TouchableOpacity,
   StyleSheet,
   View,
-  Modal,
   ScrollView,
-  TouchableWithoutFeedback,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { CAMPUS_LOCATIONS, CAMPUS_METADATA } from '../data/mockData';
 import { useHustleContext } from '../context/HustleContext';
 import { colors, shadows } from '../theme/colors';
+import { isUnfilteredLocation } from '../utils/hustle';
 
 export const LocationFilter: React.FC = () => {
   const { selectedLocation, setSelectedLocation, selectedCampus } = useHustleContext();
-  const [modalVisible, setModalVisible] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
 
-  const isFiltered = selectedLocation !== 'All Locations';
   const campusLocations = CAMPUS_LOCATIONS[selectedCampus] || CAMPUS_LOCATIONS.knust;
-  const campusName = CAMPUS_METADATA[selectedCampus]?.shortName || 'Campus';
+  const campusName = CAMPUS_METADATA[selectedCampus]?.shortName || 'KNUST';
+  const defaultLabel = `All ${campusName}`;
+
+  const isFiltered = !isUnfilteredLocation(selectedLocation);
+
+  const handleSelectLocation = (loc: string) => {
+    setSelectedLocation(loc);
+    setIsExpanded(false);
+  };
+
+  const displayText = isFiltered
+    ? selectedLocation
+    : 'Filter by Hostel / Area';
 
   return (
     <View style={styles.container}>
-      <View style={styles.dropdownBtnRow}>
-        <TouchableOpacity
-          style={[styles.dropdownBtn, isFiltered && styles.activeDropdownBtn]}
-          onPress={() => setModalVisible(true)}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.pinIcon}>📍</Text>
+      {/* Dropdown Toggle Button */}
+      <TouchableOpacity
+        style={[styles.dropdownBtn, isExpanded && styles.dropdownBtnExpanded]}
+        onPress={() => setIsExpanded(!isExpanded)}
+        activeOpacity={0.8}
+      >
+        <View style={styles.btnLeft}>
+          <Ionicons name="location-outline" size={17} color="#94A3B8" style={styles.pinIcon} />
           <Text style={[styles.btnText, isFiltered && styles.activeBtnText]} numberOfLines={1}>
-            {isFiltered ? selectedLocation : `Filter by Hostel / Area`}
+            {displayText}
           </Text>
-          <Text style={styles.arrowIcon}>˅</Text>
-        </TouchableOpacity>
+        </View>
+        <Ionicons
+          name={isExpanded ? 'chevron-up-outline' : 'chevron-down-outline'}
+          size={18}
+          color="#94A3B8"
+        />
+      </TouchableOpacity>
 
-        {isFiltered && (
-          <TouchableOpacity
-            style={styles.clearChip}
-            onPress={() => setSelectedLocation('All Locations')}
-            activeOpacity={0.7}
+      {/* Expanded Location List matching screenshot */}
+      {isExpanded && (
+        <View style={styles.expandedMenu}>
+          <ScrollView
+            style={styles.scrollList}
+            nestedScrollEnabled={true}
+            showsVerticalScrollIndicator={false}
           >
-            <Text style={styles.clearChipText}>✕ Clear</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+            {campusLocations.map((loc, index) => {
+              const isAllOption = isUnfilteredLocation(loc) || loc === defaultLabel || loc === 'All KNUST';
+              const isSelected = isAllOption
+                ? !isFiltered
+                : selectedLocation === loc;
 
-      {/* Dropdown Modal Menu */}
-      <Modal visible={modalVisible} transparent animationType="fade">
-        <TouchableWithoutFeedback onPress={() => setModalVisible(false)}>
-          <View style={styles.modalOverlay}>
-            <TouchableWithoutFeedback>
-              <View style={styles.dropdownMenu}>
-                <View style={styles.menuHeader}>
-                  <Text style={styles.menuTitle}>📍 Select {campusName} Hostel / Area</Text>
-                  <TouchableOpacity onPress={() => setModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                    <Text style={styles.closeBtn}>✕</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <ScrollView style={styles.menuList} showsVerticalScrollIndicator={false}>
-                  {campusLocations.map((loc) => {
-                    const isSelected = selectedLocation === loc;
-                    return (
-                      <TouchableOpacity
-                        key={loc}
-                        style={[styles.menuItem, isSelected && styles.selectedMenuItem]}
-                        onPress={() => {
-                          setSelectedLocation(loc);
-                          setModalVisible(false);
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={[styles.menuItemText, isSelected && styles.selectedMenuItemText]}>
-                          {loc === 'All Locations' ? `📍 All ${campusName} Locations` : `📍 ${loc}`}
-                        </Text>
-                        {isSelected && <Text style={styles.checkmark}>✓</Text>}
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
+              return (
+                <TouchableOpacity
+                  key={loc}
+                  style={[
+                    styles.menuItem,
+                    isSelected && isAllOption && styles.menuItemAllSelected,
+                    isSelected && !isAllOption && styles.menuItemSelected,
+                    index === campusLocations.length - 1 && styles.menuItemLast,
+                  ]}
+                  onPress={() => handleSelectLocation(isAllOption ? 'All Locations' : loc)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.menuItemLeft}>
+                    <Ionicons
+                      name="location-outline"
+                      size={16}
+                      color={isSelected ? colors.primary : '#94A3B8'}
+                      style={styles.itemPinIcon}
+                    />
+                    <Text
+                      style={[
+                        styles.menuItemText,
+                        isSelected && styles.menuItemTextSelected,
+                      ]}
+                    >
+                      {isAllOption ? defaultLabel : loc}
+                    </Text>
+                  </View>
+                  {isSelected && (
+                    <Ionicons name="checkmark" size={17} color={colors.primary} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
     </View>
   );
 };
@@ -94,121 +112,85 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 12,
   },
-  dropdownBtnRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
   dropdownBtn: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surfaceAlt,
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 16,
+    paddingVertical: 13,
   },
-  activeDropdownBtn: {
-    backgroundColor: colors.primaryMint,
-    borderColor: colors.primary,
+  dropdownBtnExpanded: {
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    borderColor: '#CBD5E1',
+  },
+  btnLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
   },
   pinIcon: {
-    fontSize: 13,
-    marginRight: 6,
+    marginRight: 10,
   },
   btnText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.textSecondary,
+    fontSize: 14,
+    color: '#475569',
+    fontWeight: '600',
   },
   activeBtnText: {
-    color: colors.primary,
-  },
-  arrowIcon: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginLeft: 4,
-    fontWeight: '800',
-  },
-  clearChip: {
-    backgroundColor: colors.busyBg,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-    paddingHorizontal: 10,
-    paddingVertical: 9,
-    borderRadius: 12,
-  },
-  clearChipText: {
-    color: colors.busyText,
-    fontSize: 11.5,
-    fontWeight: '800',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  dropdownMenu: {
-    backgroundColor: colors.surface,
-    borderRadius: 22,
-    width: '100%',
-    maxWidth: 380,
-    maxHeight: 400,
-    padding: 18,
-    ...shadows.cardHover,
-  },
-  menuHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
-    marginBottom: 8,
-  },
-  menuTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.textPrimary,
-  },
-  closeBtn: {
-    fontSize: 16,
-    color: colors.textMuted,
+    color: '#0F172A',
     fontWeight: '700',
-    padding: 4,
   },
-  menuList: {
-    maxHeight: 310,
+  expandedMenu: {
+    backgroundColor: '#FFFFFF',
+    borderBottomLeftRadius: 14,
+    borderBottomRightRadius: 14,
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderColor: '#CBD5E1',
+    maxHeight: 260,
+    overflow: 'hidden',
+    ...shadows.card,
+  },
+  scrollList: {
+    maxHeight: 260,
   },
   menuItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    marginBottom: 4,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
-  selectedMenuItem: {
-    backgroundColor: colors.primaryMint,
+  menuItemLast: {
+    borderBottomWidth: 0,
+  },
+  menuItemAllSelected: {
+    backgroundColor: '#F0FDF4', // light emerald tint
+  },
+  menuItemSelected: {
+    backgroundColor: '#F8FAFC',
+  },
+  menuItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  itemPinIcon: {
+    marginRight: 12,
   },
   menuItemText: {
     fontSize: 14,
-    color: colors.textPrimary,
+    color: '#334155',
     fontWeight: '600',
   },
-  selectedMenuItemText: {
-    color: colors.primary,
-    fontWeight: '800',
-  },
-  checkmark: {
-    color: colors.primary,
-    fontSize: 16,
-    fontWeight: '900',
+  menuItemTextSelected: {
+    color: colors.primary, // #059669
+    fontWeight: '700',
   },
 });

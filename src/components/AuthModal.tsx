@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { CAMPUS_LOCATIONS, CAMPUS_METADATA } from '../data/mockData';
 import {
   registerStudentApi,
@@ -132,7 +133,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
     try {
       const res = await loginStudentApi({ email: cleanEmail, password });
       setIsLoading(false);
-      showAlert('🎉 Welcome Back!', `Logged in as ${res.user.name} (${campusInfo.shortName})`);
+      showAlert('Welcome Back', `Logged in as ${res.user.name} (${campusInfo.shortName})`);
       onSuccess(res.user, res.token);
       onClose();
     } catch (error: any) {
@@ -168,18 +169,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
     try {
       const res = await sendSmsOtpApi({
         email: cleanEmail,
-        whatsAppNumber: cleanPhone,
+        whatsAppNumber: formatGhanaPhoneNumber(cleanPhone) || cleanPhone,
         purpose: 'login',
         campus: selectedCampus,
       });
 
       setIsLoading(false);
       setOtpTargetPhone(res.data?.phoneMasked || cleanPhone || 'your phone');
-      setDevOtp(res.data?.devOtp || null);
+      setDevOtp(__DEV__ ? res.data?.devOtp || null : null);
       setStep('otp_verify');
       setCountdown(60);
       setOtpCode('');
-      showAlert('📱 Security Code Dispatched', res.message || 'Enter the 6-digit code received via SMS.');
+      showAlert('Security Code Dispatched', res.message || 'Enter the 6-digit code received via SMS.');
     } catch (err: any) {
       setIsLoading(false);
       setErrorMessage(err.message || 'Unable to send SMS code. Please try again.');
@@ -219,7 +220,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
         );
       } else {
         setErrorMessage(
-          `Valid ${campusInfo.shortName} student email required (must end with ${expectedDomain}). Tap "Quick Demo Fill" to auto-fill an account.`
+          `Valid ${campusInfo.shortName} student email required (must end with ${expectedDomain}).`
         );
       }
       return;
@@ -245,12 +246,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
 
       setIsLoading(false);
       setOtpTargetPhone(res.data?.phoneMasked || sanitizedWhatsApp);
-      setDevOtp(res.data?.devOtp || null);
+      setDevOtp(__DEV__ ? res.data?.devOtp || null : null);
       setStep('otp_verify');
       setCountdown(60);
       setOtpCode('');
       showAlert(
-        '📱 Security Code Dispatched',
+        'Security Code Dispatched',
         `A 6-digit verification code was sent via SMS to ${res.data?.phoneMasked || sanitizedWhatsApp}.`
       );
     } catch (error: any) {
@@ -273,13 +274,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
     try {
       const res = await verifySmsOtpApi({
         email: email.trim().toLowerCase(),
-        phone: whatsAppNumber.trim(),
+        phone: formatGhanaPhoneNumber(whatsAppNumber) || whatsAppNumber.trim(),
         otp: otpCode.trim(),
         purpose: mode,
       });
 
       setIsLoading(false);
-      showAlert('🎉 Phone Verified!', `Welcome to CampusHustle ${campusInfo.shortName}, ${res.user.name}!`);
+      showAlert('Phone Verified', `Welcome to CampusHustle ${campusInfo.shortName}, ${res.user.name}!`);
       onSuccess(res.user, res.token);
       onClose();
     } catch (err: any) {
@@ -300,8 +301,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
       });
       setIsLoading(false);
       setCountdown(60);
-      setDevOtp(res.devOtp || null);
-      showAlert('📱 New SMS Dispatched', 'A fresh 6-digit verification code was sent to your phone.');
+      setDevOtp(__DEV__ ? res.devOtp || res.data?.devOtp || null : null);
+      showAlert('New SMS Dispatched', 'A fresh 6-digit verification code was sent to your phone.');
     } catch (err: any) {
       setIsLoading(false);
       showAlert('Error', err.message || 'Could not resend SMS.');
@@ -318,7 +319,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
               Campus<Text style={styles.greenText}>Hustle</Text> {campusInfo.shortName}
             </Text>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <Text style={styles.closeText}>✕</Text>
+              <Ionicons name="close" size={20} color="#64748B" />
             </TouchableOpacity>
           </View>
 
@@ -353,7 +354,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
           {/* Inline Error Notice Banner */}
           {errorMessage ? (
             <View style={styles.errorBanner}>
-              <Text style={styles.errorBannerText}>⚠️ {errorMessage}</Text>
+              <Ionicons name="alert-circle" size={16} color="#DC2626" style={{ marginRight: 6 }} />
+              <Text style={styles.errorBannerText}>{errorMessage}</Text>
             </View>
           ) : null}
 
@@ -361,7 +363,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
           {step === 'otp_verify' ? (
             <View style={styles.otpContainer}>
               <View style={styles.otpIconBadge}>
-                <Text style={styles.otpIcon}>📱</Text>
+                <Ionicons name="phone-portrait-outline" size={24} color={colors.primary} />
               </View>
 
               <Text style={styles.otpTitle}>Enter SMS Verification Code</Text>
@@ -390,7 +392,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
               </View>
 
               {/* Developer One-Tap Auto Fill */}
-              {devOtp && (
+              {__DEV__ && devOtp && (
                 <TouchableOpacity
                   style={styles.devOtpBtn}
                   onPress={() => {
@@ -399,7 +401,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
                   }}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.devOtpText}>⚡ One-Tap Demo Fill ({devOtp})</Text>
+                  <Text style={styles.devOtpText}>One-Tap Demo Fill ({devOtp})</Text>
                 </TouchableOpacity>
               )}
 
@@ -414,7 +416,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
                   <ActivityIndicator color="#FFFFFF" />
                 ) : (
                   <Text style={styles.submitBtnText}>
-                    {mode === 'register' ? '✅ Verify Phone & Register' : '🔓 Verify Phone & Log In'}
+                    {mode === 'register' ? 'Verify Phone & Register' : 'Verify Phone & Log In'}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -425,7 +427,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
                   <Text style={styles.resendTimerText}>Resend SMS in {countdown}s</Text>
                 ) : (
                   <TouchableOpacity onPress={resendSmsOtp}>
-                    <Text style={styles.resendActionText}>🔄 Resend SMS Code</Text>
+                    <Text style={styles.resendActionText}>Resend SMS Code</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -461,7 +463,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
                           loginMethod === 'password' && styles.methodOptionTextActive,
                         ]}
                       >
-                        🔑 Password Login
+                        Password Login
                       </Text>
                     </TouchableOpacity>
 
@@ -478,7 +480,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
                           loginMethod === 'sms_otp' && styles.methodOptionTextActive,
                         ]}
                       >
-                        📱 SMS OTP Login
+                        SMS OTP Login
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -541,13 +543,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
                     ) : (
                       <Text style={styles.submitBtnText}>
                         {loginMethod === 'password'
-                          ? `🔑 Log In to ${campusInfo.shortName}`
-                          : `📱 Send 6-Digit SMS Login Code`}
+                          ? `Log In to ${campusInfo.shortName}`
+                          : `Send 6-Digit SMS Login Code`}
                       </Text>
                     )}
                   </TouchableOpacity>
 
-                  {/* Demo Fill */}
+                  {__DEV__ ? (
                   <TouchableOpacity
                     style={styles.demoFillBtn}
                     onPress={() => {
@@ -557,8 +559,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
                       setErrorMessage(null);
                     }}
                   >
-                    <Text style={styles.demoFillBtnText}>💡 Demo Fill {campusInfo.shortName} Credentials</Text>
+                    <Text style={styles.demoFillBtnText}>Demo Fill {campusInfo.shortName} Credentials</Text>
                   </TouchableOpacity>
+                  ) : null}
                 </View>
               ) : (
                 /* REGISTRATION TAB */
@@ -567,9 +570,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
                     <Text style={styles.subtext}>
                       Create your seller profile with your valid @{campusInfo.emailDomain} email.
                     </Text>
+                    {__DEV__ ? (
                     <TouchableOpacity style={styles.quickFillTag} onPress={fillDemoData}>
-                      <Text style={styles.quickFillTagText}>⚡ Quick Demo Fill</Text>
+                      <Text style={styles.quickFillTagText}>Quick Demo Fill</Text>
                     </TouchableOpacity>
+                    ) : null}
                   </View>
 
                   <View style={styles.inputGroup}>
@@ -637,7 +642,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
                           onPress={() => setHostelLocation(loc)}
                         >
                           <Text style={[styles.chipText, hostelLocation === loc && styles.selectedChipText]}>
-                            📍 {loc}
+                            {loc}
                           </Text>
                         </TouchableOpacity>
                       ))}
@@ -666,7 +671,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onSucces
                     {isLoading ? (
                       <ActivityIndicator color="#FFFFFF" />
                     ) : (
-                      <Text style={styles.submitBtnText}>📱 Send SMS Verification Code</Text>
+                      <Text style={styles.submitBtnText}>Send SMS Verification Code</Text>
                     )}
                   </TouchableOpacity>
                 </View>

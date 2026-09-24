@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CampusId, CategoryId, Hustle, StudentProfile } from '../types';
+import { isUnfilteredLocation } from '../utils/hustle';
 import {
   fetchHustlesFromApi,
   createHustleInApi,
@@ -20,6 +21,7 @@ const STORAGE_KEYS = {
 interface HustleContextType {
   hustles: Hustle[];
   favorites: string[];
+  savedHustles: Hustle[];
   searchQuery: string;
   selectedCategory: CategoryId;
   selectedLocation: string;
@@ -51,6 +53,7 @@ const HustleContext = createContext<HustleContextType | undefined>(undefined);
 export const HustleProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [hustles, setHustles] = useState<Hustle[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [savedHustles, setSavedHustles] = useState<Hustle[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<CategoryId>('all');
   const [selectedLocation, setSelectedLocation] = useState('All Locations');
@@ -115,6 +118,7 @@ export const HustleProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               .then((res) => {
                 if (res && Array.isArray(res.favoriteIds)) {
                   setFavorites(res.favoriteIds);
+                  setSavedHustles(res.data || []);
                   AsyncStorage.setItem(STORAGE_KEYS.FAVORITES, JSON.stringify(res.favoriteIds)).catch(() => {});
                 }
               })
@@ -167,6 +171,7 @@ export const HustleProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       .then((res) => {
         if (res && Array.isArray(res.favoriteIds)) {
           setFavorites(res.favoriteIds);
+          setSavedHustles(res.data || []);
           AsyncStorage.setItem(STORAGE_KEYS.FAVORITES, JSON.stringify(res.favoriteIds)).catch(() => {});
         }
       })
@@ -203,6 +208,7 @@ export const HustleProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     // Optimistic UI removal
     setHustles((prev) => prev.filter((item) => item.id !== id));
     setFavorites((prev) => prev.filter((favId) => favId !== id));
+    setSavedHustles((prev) => prev.filter((item) => item.id !== id));
 
     // Persist deletion to backend if token exists
     if (token) {
@@ -216,15 +222,15 @@ export const HustleProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   };
 
   const updateHustleStatus = (id: string, status: 'OPEN' | 'BUSY') => {
-    setHustles((prev) =>
-      prev.map((h) => (h.id === id ? { ...h, status } : h))
-    );
+    const patch = (h: Hustle) => (h.id === id ? { ...h, status } : h);
+    setHustles((prev) => prev.map(patch));
+    setSavedHustles((prev) => prev.map(patch));
   };
 
   const updateHustleRating = (id: string, rating: number, reviewCount: number) => {
-    setHustles((prev) =>
-      prev.map((h) => (h.id === id ? { ...h, rating, reviewCount } : h))
-    );
+    const patch = (h: Hustle) => (h.id === id ? { ...h, rating, reviewCount } : h);
+    setHustles((prev) => prev.map(patch));
+    setSavedHustles((prev) => prev.map(patch));
   };
 
   const toggleFavorite = (id: string) => {
@@ -233,11 +239,27 @@ export const HustleProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setFavorites(updated);
     AsyncStorage.setItem(STORAGE_KEYS.FAVORITES, JSON.stringify(updated)).catch(() => {});
 
+    if (isFav) {
+      setSavedHustles((prev) => prev.filter((hustle) => hustle.id !== id));
+    } else {
+      const match = hustles.find((hustle) => hustle.id === id);
+      if (match) {
+        setSavedHustles((prev) => (prev.some((hustle) => hustle.id === id) ? prev : [...prev, match]));
+      }
+    }
+
     if (token) {
       toggleFavoriteApi(id, token).catch((err) => {
         console.warn('Failed to toggle favorite on server:', err);
-        // Rollback state if server request fails
         setFavorites((prev) => (isFav ? [...prev, id] : prev.filter((favId) => favId !== id)));
+        if (isFav) {
+          const match = hustles.find((hustle) => hustle.id === id);
+          if (match) {
+            setSavedHustles((prev) => (prev.some((h) => h.id === id) ? prev : [...prev, match]));
+          }
+        } else {
+          setSavedHustles((prev) => prev.filter((hustle) => hustle.id !== id));
+        }
       });
     }
   };
@@ -260,7 +282,7 @@ export const HustleProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       }
 
       if (
-        selectedLocation !== 'All Locations' &&
+        !isUnfilteredLocation(selectedLocation) &&
         !hustle.hostelLocation.toLowerCase().includes(selectedLocation.toLowerCase())
       ) {
         return false;
@@ -270,8 +292,8 @@ export const HustleProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         const query = searchQuery.toLowerCase();
         const matchesTitle = hustle.title.toLowerCase().includes(query);
         const matchesDesc = hustle.description.toLowerCase().includes(query);
-        const matchesSeller = hustle.sellerName.toLowerCase().includes(query);
-        const matchesTags = hustle.tags.some((tag) => tag.toLowerCase().includes(query));
+        const matchesSeller = (hustle.sellerName || '').toLowerCase().includes(query);
+        const matchesTags = (hustle.tags || []).some((tag) => tag.toLowerCase().includes(query));
         const matchesHostel = hustle.hostelLocation.toLowerCase().includes(query);
 
         return matchesTitle || matchesDesc || matchesSeller || matchesTags || matchesHostel;
@@ -286,6 +308,7 @@ export const HustleProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       value={{
         hustles,
         favorites,
+        savedHustles,
         searchQuery,
         selectedCategory,
         selectedLocation,

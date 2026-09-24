@@ -13,12 +13,12 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useHustleContext } from '../context/HustleContext';
 import { CATEGORIES, CAMPUS_LOCATIONS, CAMPUS_METADATA } from '../data/mockData';
 import { CategoryId, PriceType, DeliveryMode } from '../types';
 import { formatGhanaPhoneNumber, uploadHustleImageApi } from '../services/api';
-import { getHustleImageUrl } from '../utils/imageHelper';
 import { colors, shadows } from '../theme/colors';
 
 interface PostHustleScreenProps {
@@ -36,31 +36,52 @@ const showAlert = (title: string, message: string, onOk?: () => void) => {
   }
 };
 
+const CATEGORY_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
+  all: 'compass-outline',
+  tutoring: 'book-outline',
+  tech_repair: 'laptop-outline',
+  food_delivery: 'restaurant-outline',
+  photo_video: 'camera-outline',
+  fashion_beauty: 'cut-outline',
+  laundry_errands: 'cube-outline',
+  custom: 'brush-outline',
+};
+
 export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }) => {
   const { addHustle, user, token, setAuthModalVisible, selectedCampus } = useHustleContext();
 
   const campusInfo = CAMPUS_METADATA[selectedCampus] || CAMPUS_METADATA.knust;
   const availableLocations = (CAMPUS_LOCATIONS[selectedCampus] || CAMPUS_LOCATIONS.knust).filter(
-    (l) => l !== 'All Locations'
+    (l) => l !== 'All Locations' && l !== 'All KNUST'
   );
 
+  // Form State
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<CategoryId>('tutoring');
-  const [customCategory, setCustomCategory] = useState('');
-  const [price, setPrice] = useState('');
-  const [priceType, setPriceType] = useState<PriceType>('flat');
-  const [hostelLocation, setHostelLocation] = useState(availableLocations[0] || 'Campus Area');
   const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>('to_client');
   const [status, setStatus] = useState<'OPEN' | 'BUSY'>('OPEN');
+  const [price, setPrice] = useState('');
+  const [priceType, setPriceType] = useState<PriceType>('flat');
+  const [hostelLocation, setHostelLocation] = useState(availableLocations[0] || 'Ayeduase');
+  const [sellerName, setSellerName] = useState(user?.name || 'Emma Robert');
   const [whatsAppNumber, setWhatsAppNumber] = useState('');
+  const [program, setProgram] = useState(user?.program?.split(' (')[0] || 'Computer Engineering');
+  const [level, setLevel] = useState('Level 300');
   const [description, setDescription] = useState('');
+  const [tags, setTags] = useState('');
   const [customImageUri, setCustomImageUri] = useState<string | null>(null);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [locationModalOpen, setLocationModalOpen] = useState(false);
+  const [levelModalOpen, setLevelModalOpen] = useState(false);
 
   useEffect(() => {
     if (user?.whatsAppNumber) {
-      setWhatsAppNumber(user.whatsAppNumber);
+      setWhatsAppNumber(user.whatsAppNumber.replace(/^233/, '0'));
+    }
+    if (user?.name) {
+      setSellerName(user.name);
     }
     if (user?.hostelLocation) {
       setHostelLocation(user.hostelLocation);
@@ -71,7 +92,7 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        showAlert('Permission Required', 'Please allow gallery access to upload hustle pictures.');
+        showAlert('Permission Required', 'Please allow gallery access to upload photos of your work.');
         return;
       }
 
@@ -90,32 +111,39 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
     }
   };
 
-  const deliveryModesList: { id: DeliveryMode; title: string; subtitle: string; icon: string }[] = [
+  const deliveryModesList: {
+    id: DeliveryMode;
+    title: string;
+    subtitle: string;
+    icon: keyof typeof Ionicons.glyphMap;
+  }[] = [
     {
       id: 'to_client',
       title: 'I visit your hostel',
       subtitle: "You travel to client's location",
-      icon: '🚀',
+      icon: 'send-outline',
     },
     {
       id: 'at_seller',
       title: 'Come to my hostel',
-      subtitle: 'Client comes to your hostel/room',
-      icon: '🏠',
+      subtitle: "Client comes to your hostel/room",
+      icon: 'home-outline',
     },
     {
       id: 'campus_spot',
       title: 'Meet on campus',
       subtitle: 'Library, Great Hall, lecture areas',
-      icon: '🎓',
+      icon: 'people-outline',
     },
     {
       id: 'remote',
       title: 'Remote / Online',
       subtitle: 'WhatsApp, Zoom, Email delivery',
-      icon: '💻',
+      icon: 'wifi-outline',
     },
   ];
+
+  const levelsList = ['Level 100', 'Level 200', 'Level 300', 'Level 400', 'Postgraduate'];
 
   const isFormValid =
     title.trim().length >= 4 &&
@@ -141,45 +169,55 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
       return;
     }
 
-    if (!whatsAppNumber.trim()) {
-      setErrorMessage('Please enter a valid Ghanaian WhatsApp phone number.');
+    if (!whatsAppNumber.trim() || whatsAppNumber.replace(/\D/g, '').length < 9) {
+      setErrorMessage('Please enter a valid Ghana WhatsApp number (e.g. 0241234567).');
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      let finalImageUrl: string | undefined = undefined;
+      const formattedWhatsApp = formatGhanaPhoneNumber(whatsAppNumber);
+      let finalImageUrl =
+        'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=600&q=80';
 
       if (customImageUri) {
-        try {
-          const uploadRes = await uploadHustleImageApi(customImageUri, token || '');
-          if (uploadRes && uploadRes.imageUrl) {
-            finalImageUrl = uploadRes.imageUrl;
-          }
-        } catch (uploadErr) {
-          console.warn('Image upload notice:', uploadErr);
+        if (!token) {
+          setAuthModalVisible(true);
+          setIsSubmitting(false);
+          return;
         }
+        const uploadRes = await uploadHustleImageApi(customImageUri, token);
+        if (!uploadRes?.imageUrl) {
+          throw new Error('Could not upload your photo. Please try another image.');
+        }
+        finalImageUrl = uploadRes.imageUrl;
       }
+
+      const tagArray = tags
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
 
       await addHustle({
         title: title.trim(),
-        category: category === 'all' ? 'custom' : category,
+        description: description.trim() || 'Professional campus service provided by ' + sellerName,
         price: numPrice,
         priceType,
+        category,
+        sellerId: user.id,
+        sellerName: sellerName.trim(),
+        sellerProgram: `${program.trim()} (${level})`,
+        campus: selectedCampus,
         hostelLocation,
+        whatsAppNumber: formattedWhatsApp,
+        imageUrl: finalImageUrl,
+        tags: tagArray.length > 0 ? tagArray : ['Campus', 'Student', category],
         deliveryMode,
         status,
-        sellerName: user.name || 'Student Seller',
-        sellerProgram: user.program || 'Student',
-        whatsAppNumber: formatGhanaPhoneNumber(whatsAppNumber),
-        description: description.trim() || `${title} offered at ${hostelLocation}`,
-        imageUrl: finalImageUrl || getHustleImageUrl(null, category, title.trim()),
-        tags: [category, hostelLocation, deliveryMode].filter(Boolean),
-        campus: selectedCampus,
       });
 
-      showAlert('🎉 Service Published!', 'Your hustle is now live on CampusHustle.', () => {
+      showAlert('Service Published', 'Your service is now live on CampusHustle.', () => {
         navigation.navigate('Home');
       });
     } catch (err: any) {
@@ -193,146 +231,128 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
 
-      {/* Top Header Card matching Figma */}
-      <View style={styles.topHeader}>
-        <View style={styles.headerRow}>
+      {/* Header matching screenshots */}
+      <View style={styles.headerBar}>
+        <View style={styles.headerTopRow}>
           <TouchableOpacity
             style={styles.backBtn}
             onPress={() => navigation.goBack()}
             activeOpacity={0.8}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Text style={styles.backBtnText}>←</Text>
+            <Ionicons name="arrow-back" size={20} color="#FFFFFF" />
           </TouchableOpacity>
 
-          <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>Post a Service</Text>
-            <Text style={styles.headerSubtitle} numberOfLines={1}>
-              Publishing as {user?.name || 'Student'} · {user?.program || campusInfo.shortName}
-            </Text>
-          </View>
+          <Text style={styles.headerTitle}>Post a Service</Text>
 
           <TouchableOpacity
-            style={styles.draftBtn}
-            onPress={() => showAlert('Draft Saved', 'Your progress is stored locally.')}
+            style={styles.saveDraftBtn}
+            onPress={() => showAlert('Draft Saved', 'Your service draft has been saved locally.')}
             activeOpacity={0.8}
           >
-            <Text style={styles.draftBtnText}>Save Draft</Text>
+            <Text style={styles.saveDraftText}>Save Draft</Text>
           </TouchableOpacity>
         </View>
+
+        <Text style={styles.headerSubtitle}>
+          Publishing as {sellerName} · {program}
+        </Text>
       </View>
 
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        style={styles.scrollContent}
+        contentContainerStyle={styles.scrollContainer}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         {errorMessage && (
-          <View style={styles.errorBanner}>
-            <Text style={styles.errorText}>⚠️ {errorMessage}</Text>
+          <View style={styles.errorBox}>
+            <Ionicons name="alert-circle" size={16} color="#DC2626" style={{ marginRight: 6 }} />
+            <Text style={styles.errorText}>{errorMessage}</Text>
           </View>
         )}
 
-        {/* 01 — SERVICE INFO (Figma) */}
+        {/* 01 — SERVICE INFO */}
         <View style={styles.sectionCard}>
-          <Text style={styles.sectionIndex}>01 — SERVICE INFO</Text>
+          <Text style={styles.sectionHeader}>01 — SERVICE INFO</Text>
 
-          <Text style={styles.label}>Service Title *</Text>
+          <Text style={styles.fieldLabel}>
+            Service Title <Text style={styles.requiredStar}>*</Text>
+          </Text>
           <TextInput
-            style={styles.input}
-            placeholder="e.g. Calculus Tutoring, Laptop Formatting, Hair Styling..."
-            placeholderTextColor={colors.textMuted}
+            style={styles.textInput}
+            placeholder="e.g. Calculus Tutoring, Laptop Formatting, k..."
+            placeholderTextColor="#94A3B8"
             value={title}
             onChangeText={setTitle}
-            maxLength={80}
           />
 
-          <Text style={[styles.label, { marginTop: 14 }]}>Category *</Text>
+          <Text style={[styles.fieldLabel, { marginTop: 16 }]}>
+            Category <Text style={styles.requiredStar}>*</Text>
+          </Text>
           <View style={styles.categoryGrid}>
             {CATEGORIES.filter((c) => c.id !== 'all').map((cat) => {
               const isSelected = category === cat.id;
+              const iconName = CATEGORY_ICONS[cat.id] || 'apps-outline';
               return (
                 <TouchableOpacity
                   key={cat.id}
-                  style={[styles.categoryPill, isSelected && styles.categoryPillActive]}
-                  onPress={() => setCategory(cat.id as CategoryId)}
-                  activeOpacity={0.8}
+                  style={[styles.categoryPill, isSelected && styles.categoryPillSelected]}
+                  onPress={() => setCategory(cat.id)}
+                  activeOpacity={0.75}
                 >
-                  <Text style={styles.categoryIcon}>{cat.icon}</Text>
-                  <Text style={[styles.categoryLabel, isSelected && styles.categoryLabelActive]}>
+                  <Ionicons
+                    name={iconName}
+                    size={16}
+                    color={isSelected ? colors.primary : '#475569'}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text style={[styles.categoryLabel, isSelected && styles.categoryLabelSelected]}>
                     {cat.label}
                   </Text>
                 </TouchableOpacity>
               );
             })}
           </View>
-
-          {/* Pricing Row */}
-          <Text style={[styles.label, { marginTop: 14 }]}>Price (GH₵) *</Text>
-          <View style={styles.priceRow}>
-            <View style={styles.currencyPrefix}>
-              <Text style={styles.currencyText}>GH₵</Text>
-            </View>
-            <TextInput
-              style={styles.priceInput}
-              placeholder="e.g. 50"
-              placeholderTextColor={colors.textMuted}
-              value={price}
-              onChangeText={setPrice}
-              keyboardType="numeric"
-            />
-          </View>
-
-          {/* Price Type Chips */}
-          <View style={styles.priceTypeRow}>
-            {[
-              { id: 'flat', label: 'Flat Fee' },
-              { id: 'starting_at', label: 'Starting From' },
-              { id: 'hourly', label: 'Per Hour' },
-            ].map((pt) => {
-              const isSelected = priceType === pt.id;
-              return (
-                <TouchableOpacity
-                  key={pt.id}
-                  style={[styles.priceTypeChip, isSelected && styles.priceTypeChipActive]}
-                  onPress={() => setPriceType(pt.id as PriceType)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.priceTypeChipText, isSelected && styles.priceTypeChipTextActive]}>
-                    {pt.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
         </View>
 
-        {/* 02 — HOW YOU DELIVER (Figma) */}
+        {/* 02 — HOW YOU DELIVER */}
         <View style={styles.sectionCard}>
-          <Text style={styles.sectionIndex}>02 — HOW YOU DELIVER</Text>
-          <Text style={styles.label}>Service / Meeting Mode *</Text>
+          <Text style={styles.sectionHeader}>02 — HOW YOU DELIVER</Text>
+          <Text style={styles.fieldLabel}>
+            Service / Meeting Mode <Text style={styles.requiredStar}>*</Text>
+          </Text>
 
-          <View style={styles.deliveryList}>
+          <View style={styles.deliveryCardsStack}>
             {deliveryModesList.map((mode) => {
               const isSelected = deliveryMode === mode.id;
               return (
                 <TouchableOpacity
                   key={mode.id}
-                  style={[styles.deliveryCard, isSelected && styles.deliveryCardActive]}
+                  style={[styles.deliveryCard, isSelected && styles.deliveryCardSelected]}
                   onPress={() => setDeliveryMode(mode.id)}
                   activeOpacity={0.8}
                 >
-                  <View style={[styles.deliveryIconBox, isSelected && styles.deliveryIconBoxActive]}>
-                    <Text style={styles.deliveryEmoji}>{mode.icon}</Text>
+                  <View style={[styles.deliveryIconBox, isSelected && styles.deliveryIconBoxSelected]}>
+                    <Ionicons
+                      name={mode.icon}
+                      size={20}
+                      color={isSelected ? '#FFFFFF' : '#475569'}
+                    />
                   </View>
-                  <View style={styles.deliveryContent}>
-                    <Text style={[styles.deliveryTitle, isSelected && styles.deliveryTitleActive]}>
+
+                  <View style={styles.deliveryTextCluster}>
+                    <Text style={[styles.deliveryTitle, isSelected && styles.deliveryTitleSelected]}>
                       {mode.title}
                     </Text>
                     <Text style={styles.deliverySubtitle}>{mode.subtitle}</Text>
                   </View>
-                  <View style={[styles.radioCircle, isSelected && styles.radioCircleActive]}>
-                    {isSelected && <Text style={styles.radioCheck}>✓</Text>}
+
+                  <View style={styles.radioBox}>
+                    {isSelected ? (
+                      <Ionicons name="checkmark-circle" size={22} color={colors.primary} />
+                    ) : (
+                      <Ionicons name="ellipse-outline" size={22} color="#CBD5E1" />
+                    )}
                   </View>
                 </TouchableOpacity>
               );
@@ -340,88 +360,293 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
           </View>
         </View>
 
-        {/* 03 — LOCATION & CONTACT */}
+        {/* 03 — AVAILABILITY & PRICING */}
         <View style={styles.sectionCard}>
-          <Text style={styles.sectionIndex}>03 — LOCATION & CONTACT</Text>
+          <Text style={styles.sectionHeader}>03 — AVAILABILITY & PRICING</Text>
 
-          <Text style={styles.label}>Your Campus Hostel / Area *</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.hostelScroll}>
-            {availableLocations.map((loc) => {
-              const isSelected = hostelLocation === loc;
-              return (
+          <Text style={styles.fieldLabel}>Initial Availability Status</Text>
+          <View style={styles.statusToggleRow}>
+            <TouchableOpacity
+              style={[styles.statusToggleCard, status === 'OPEN' && styles.statusToggleCardActive]}
+              onPress={() => setStatus('OPEN')}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name="toggle"
+                size={20}
+                color={status === 'OPEN' ? colors.primary : '#94A3B8'}
+                style={{ marginRight: 8 }}
+              />
+              <Text
+                style={[
+                  styles.statusToggleText,
+                  status === 'OPEN' && styles.statusToggleTextActive,
+                ]}
+              >
+                Available for Orders
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.statusToggleCard, status === 'BUSY' && styles.statusToggleCardBusy]}
+              onPress={() => setStatus('BUSY')}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name="toggle-outline"
+                size={20}
+                color={status === 'BUSY' ? '#D97706' : '#94A3B8'}
+                style={{ marginRight: 8 }}
+              />
+              <Text
+                style={[
+                  styles.statusToggleText,
+                  status === 'BUSY' && styles.statusToggleTextBusy,
+                ]}
+              >
+                Busy with Semester
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={[styles.fieldLabel, { marginTop: 16 }]}>
+            Price (GHS) <Text style={styles.requiredStar}>*</Text>
+          </Text>
+          <View style={styles.priceRow}>
+            <View style={styles.priceInputBox}>
+              <Text style={styles.priceSymbol}>₵</Text>
+              <TextInput
+                style={styles.priceTextInput}
+                placeholder="0.00"
+                placeholderTextColor="#94A3B8"
+                keyboardType="numeric"
+                value={price}
+                onChangeText={setPrice}
+              />
+            </View>
+
+            <View style={styles.priceTypeSelector}>
+              {(['flat', 'per_job', 'starting_at'] as const).map((type) => {
+                const label = type === 'flat' ? 'Flat fee' : type === 'per_job' ? 'Per job' : 'Starting at';
+                const mappedType: PriceType = type === 'per_job' ? 'hourly' : type;
+                const isSelected = priceType === mappedType;
+
+                return (
+                  <TouchableOpacity
+                    key={type}
+                    style={[styles.priceTypePill, isSelected && styles.priceTypePillActive]}
+                    onPress={() => setPriceType(mappedType)}
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={[
+                        styles.priceTypeLabel,
+                        isSelected && styles.priceTypeLabelActive,
+                      ]}
+                    >
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+
+        {/* 04 — LOCATION & PROFILE */}
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionHeader}>04 — LOCATION & PROFILE</Text>
+
+          <Text style={styles.fieldLabel}>
+            Your Hostel / Base Location <Text style={styles.requiredStar}>*</Text>
+          </Text>
+          <TouchableOpacity
+            style={styles.dropdownSelector}
+            onPress={() => setLocationModalOpen(!locationModalOpen)}
+            activeOpacity={0.8}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="location-outline" size={17} color="#94A3B8" style={{ marginRight: 8 }} />
+              <Text style={styles.dropdownSelectorText}>{hostelLocation}</Text>
+            </View>
+            <Ionicons
+              name={locationModalOpen ? 'chevron-up-outline' : 'chevron-down-outline'}
+              size={18}
+              color="#94A3B8"
+            />
+          </TouchableOpacity>
+
+          {locationModalOpen && (
+            <View style={styles.dropdownListContainer}>
+              {availableLocations.map((loc) => (
                 <TouchableOpacity
                   key={loc}
-                  style={[styles.hostelChip, isSelected && styles.hostelChipActive]}
-                  onPress={() => setHostelLocation(loc)}
-                  activeOpacity={0.8}
+                  style={styles.dropdownListItem}
+                  onPress={() => {
+                    setHostelLocation(loc);
+                    setLocationModalOpen(false);
+                  }}
                 >
-                  <Text style={[styles.hostelChipText, isSelected && styles.hostelChipTextActive]}>
-                    📍 {loc}
+                  <Text style={[styles.dropdownItemText, hostelLocation === loc && { color: colors.primary, fontWeight: '700' }]}>
+                    {loc}
                   </Text>
+                  {hostelLocation === loc && (
+                    <Ionicons name="checkmark" size={16} color={colors.primary} />
+                  )}
                 </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+              ))}
+            </View>
+          )}
 
-          <Text style={[styles.label, { marginTop: 14 }]}>WhatsApp Number *</Text>
+          <Text style={[styles.fieldLabel, { marginTop: 14 }]}>Your Name</Text>
           <TextInput
-            style={styles.input}
-            placeholder="024XXXXXXX or +233..."
-            placeholderTextColor={colors.textMuted}
-            value={whatsAppNumber}
-            onChangeText={setWhatsAppNumber}
-            keyboardType="phone-pad"
+            style={styles.textInput}
+            value={sellerName}
+            onChangeText={setSellerName}
+            placeholder="Emma Robert"
+            placeholderTextColor="#94A3B8"
           />
 
-          <Text style={[styles.label, { marginTop: 14 }]}>Description (Optional)</Text>
+          <Text style={[styles.fieldLabel, { marginTop: 14 }]}>
+            WhatsApp Number <Text style={styles.requiredStar}>*</Text>
+          </Text>
+          <View style={styles.phoneInputRow}>
+            <View style={styles.countryCodeBadge}>
+              <Text style={styles.countryCodeText}>+233</Text>
+            </View>
+            <TextInput
+              style={styles.phoneTextInput}
+              placeholder="e.g. 0241234567"
+              placeholderTextColor="#94A3B8"
+              keyboardType="phone-pad"
+              value={whatsAppNumber}
+              onChangeText={setWhatsAppNumber}
+            />
+          </View>
+
+          <Text style={[styles.fieldLabel, { marginTop: 14 }]}>Program & Level</Text>
+          <View style={styles.programLevelRow}>
+            <TextInput
+              style={[styles.textInput, { flex: 2, marginRight: 8 }]}
+              placeholder="e.g. Computer Engineering"
+              placeholderTextColor="#94A3B8"
+              value={program}
+              onChangeText={setProgram}
+            />
+            <TouchableOpacity
+              style={[styles.dropdownSelector, { flex: 1.2 }]}
+              onPress={() => setLevelModalOpen(!levelModalOpen)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.dropdownSelectorText} numberOfLines={1}>{level}</Text>
+              <Ionicons name="chevron-down-outline" size={16} color="#94A3B8" />
+            </TouchableOpacity>
+          </View>
+
+          {levelModalOpen && (
+            <View style={styles.dropdownListContainer}>
+              {levelsList.map((lvl) => (
+                <TouchableOpacity
+                  key={lvl}
+                  style={styles.dropdownListItem}
+                  onPress={() => {
+                    setLevel(lvl);
+                    setLevelModalOpen(false);
+                  }}
+                >
+                  <Text style={[styles.dropdownItemText, level === lvl && { color: colors.primary, fontWeight: '700' }]}>
+                    {lvl}
+                  </Text>
+                  {level === lvl && (
+                    <Ionicons name="checkmark" size={16} color={colors.primary} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* 05 — DESCRIPTION & MEDIA */}
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionHeader}>05 — DESCRIPTION & MEDIA</Text>
+          </View>
+
+          <View style={styles.descriptionLabelRow}>
+            <Text style={styles.fieldLabel}>
+              Detailed Description <Text style={styles.requiredStar}>*</Text>
+            </Text>
+            <Text style={styles.charCounter}>{description.length} / 500</Text>
+          </View>
+
           <TextInput
-            style={[styles.input, styles.textArea]}
-            placeholder="Describe your tools, experience, or what clients should expect..."
-            placeholderTextColor={colors.textMuted}
+            style={styles.textArea}
+            multiline
+            numberOfLines={5}
+            maxLength={500}
+            placeholder="Describe your service — what's included, your experience, how to reach you, meeting locations..."
+            placeholderTextColor="#94A3B8"
             value={description}
             onChangeText={setDescription}
-            multiline
-            numberOfLines={3}
           />
 
-          {/* Photo Upload Section */}
-          <Text style={[styles.label, { marginTop: 14 }]}>Service Photo</Text>
-          <TouchableOpacity style={styles.uploadCard} onPress={handlePickImage} activeOpacity={0.8}>
+          <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Photos of Your Work</Text>
+          <TouchableOpacity
+            style={styles.uploadBox}
+            onPress={handlePickImage}
+            activeOpacity={0.8}
+          >
             {customImageUri ? (
-              <View style={styles.previewContainer}>
-                <Image source={{ uri: customImageUri }} style={styles.previewImage} resizeMode="cover" />
-                <TouchableOpacity style={styles.removeImageBtn} onPress={() => setCustomImageUri(null)}>
-                  <Text style={styles.removeImageText}>✕ Remove</Text>
+              <View style={styles.imagePreviewContainer}>
+                <Image source={{ uri: customImageUri }} style={styles.imagePreview} />
+                <TouchableOpacity
+                  style={styles.removeImageBtn}
+                  onPress={() => setCustomImageUri(null)}
+                >
+                  <Ionicons name="close-circle" size={20} color="#DC2626" />
+                  <Text style={styles.removeImageText}>Remove</Text>
                 </TouchableOpacity>
               </View>
             ) : (
               <View style={styles.uploadPlaceholder}>
-                <Text style={styles.uploadIcon}>📷</Text>
-                <Text style={styles.uploadPrompt}>Tap to choose a photo from your gallery</Text>
-                <Text style={styles.uploadHint}>JPG, PNG, WebP up to 10MB</Text>
+                <View style={styles.uploadIconBox}>
+                  <Ionicons name="cloud-upload-outline" size={24} color={colors.primary} />
+                </View>
+                <Text style={styles.uploadTitle}>Upload from Gallery or Camera</Text>
+                <Text style={styles.uploadSubtitle}>
+                  Photos help buyers trust your work. Up to 5 images.
+                </Text>
               </View>
             )}
           </TouchableOpacity>
-        </View>
-      </ScrollView>
 
-      {/* Sticky Bottom Publish Button */}
-      <View style={styles.stickyFooter}>
+          <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Search Tags</Text>
+          <TextInput
+            style={styles.textInput}
+            placeholder="e.g. Exams, C++, Repairs, Quick — separate"
+            placeholderTextColor="#94A3B8"
+            value={tags}
+            onChangeText={setTags}
+          />
+          <Text style={styles.helperText}>Tags help students find your service in search.</Text>
+        </View>
+
+        {/* Publish Action Button */}
         <TouchableOpacity
-          style={[styles.publishBtn, isFormValid && !isSubmitting ? styles.publishBtnActive : styles.publishBtnDisabled]}
+          style={[styles.publishBtn, (!isFormValid || isSubmitting) && styles.publishBtnDisabled]}
           onPress={handleSubmit}
           disabled={!isFormValid || isSubmitting}
           activeOpacity={0.88}
         >
           {isSubmitting ? (
-            <ActivityIndicator color={colors.textWhite} />
+            <ActivityIndicator color="#FFFFFF" size="small" />
           ) : (
-            <Text style={[styles.publishBtnText, isFormValid ? styles.publishBtnTextActive : styles.publishBtnTextDisabled]}>
+            <Text style={[styles.publishBtnText, (!isFormValid || isSubmitting) && styles.publishBtnTextDisabled]}>
               Publish Service
             </Text>
           )}
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 };
@@ -429,117 +654,114 @@ export const PostHustleScreen: React.FC<PostHustleScreenProps> = ({ navigation }
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#F8FAFC',
   },
-  topHeader: {
-    backgroundColor: colors.primary, // Forest Green #0D6535
+  headerBar: {
+    backgroundColor: colors.primary, // Vibrant Emerald Green
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 8 : 14,
+    paddingTop: Platform.OS === 'ios' ? 12 : 16,
     paddingBottom: 16,
-    borderBottomLeftRadius: 22,
-    borderBottomRightRadius: 22,
   },
-  headerRow: {
+  headerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 6,
   },
   backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  backBtnText: {
-    color: colors.textWhite,
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  headerCenter: {
-    flex: 1,
-    marginHorizontal: 12,
-  },
   headerTitle: {
-    color: colors.textWhite,
     fontSize: 18,
-    fontWeight: '900',
+    fontWeight: '800',
+    color: '#FFFFFF',
     letterSpacing: -0.3,
   },
-  headerSubtitle: {
-    color: colors.primaryMint,
-    fontSize: 11.5,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  draftBtn: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  saveDraftBtn: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     paddingHorizontal: 12,
     paddingVertical: 7,
-    borderRadius: 14,
+    borderRadius: 10,
   },
-  draftBtnText: {
-    color: colors.textWhite,
+  saveDraftText: {
+    color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: '800',
-  },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 32,
-  },
-  errorBanner: {
-    backgroundColor: colors.dangerLight,
-    padding: 12,
-    borderRadius: 14,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#FECACA',
-  },
-  errorText: {
-    color: colors.danger,
-    fontSize: 13,
     fontWeight: '700',
   },
+  headerSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  scrollContent: {
+    flex: 1,
+  },
+  scrollContainer: {
+    padding: 16,
+    paddingBottom: 40,
+  },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEE2E2',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+  },
+  errorText: {
+    color: '#B91C1C',
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
   sectionCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#E2E8F0',
     ...shadows.card,
   },
-  sectionIndex: {
+  sectionHeader: {
     fontSize: 11,
-    fontWeight: '900',
-    color: colors.primary,
+    fontWeight: '800',
+    color: '#64748B',
     letterSpacing: 0.8,
     marginBottom: 12,
   },
-  label: {
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  fieldLabel: {
     fontSize: 13,
-    fontWeight: '800',
-    color: colors.textPrimary,
+    fontWeight: '700',
+    color: '#1E293B',
     marginBottom: 6,
   },
-  input: {
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: Platform.OS === 'ios' ? 12 : 9,
-    fontSize: 13.5,
-    color: colors.textPrimary,
-    fontWeight: '600',
-    borderWidth: 1,
-    borderColor: colors.border,
+  requiredStar: {
+    color: '#EF4444',
   },
-  textArea: {
-    minHeight: 80,
-    textAlignVertical: 'top',
+  textInput: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: '#0F172A',
+    fontWeight: '500',
   },
   categoryGrid: {
     flexDirection: 'row',
@@ -549,264 +771,329 @@ const styles = StyleSheet.create({
   categoryPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surfaceAlt,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#E2E8F0',
+    borderRadius: 20,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
   },
-  categoryPillActive: {
-    backgroundColor: colors.primaryMint,
+  categoryPillSelected: {
     borderColor: colors.primary,
-  },
-  categoryIcon: {
-    fontSize: 13,
-    marginRight: 6,
+    backgroundColor: '#F0FDF4',
   },
   categoryLabel: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#334155',
   },
-  categoryLabelActive: {
+  categoryLabelSelected: {
     color: colors.primary,
-  },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  currencyPrefix: {
-    backgroundColor: colors.surfaceAlt,
-    borderTopLeftRadius: 12,
-    borderBottomLeftRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: Platform.OS === 'ios' ? 12 : 9,
-    borderWidth: 1,
-    borderRightWidth: 0,
-    borderColor: colors.border,
-  },
-  currencyText: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: colors.textPrimary,
-  },
-  priceInput: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderTopRightRadius: 12,
-    borderBottomRightRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: Platform.OS === 'ios' ? 12 : 9,
-    fontSize: 14,
-    color: colors.textPrimary,
-    fontWeight: '800',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  priceTypeRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 10,
-  },
-  priceTypeChip: {
-    flex: 1,
-    backgroundColor: colors.surfaceAlt,
-    paddingVertical: 8,
-    alignItems: 'center',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  priceTypeChipActive: {
-    backgroundColor: colors.primaryMint,
-    borderColor: colors.primary,
-  },
-  priceTypeChipText: {
-    fontSize: 11.5,
     fontWeight: '700',
-    color: colors.textSecondary,
   },
-  priceTypeChipTextActive: {
-    color: colors.primary,
-  },
-  // Delivery Modes
-  deliveryList: {
+  deliveryCardsStack: {
     gap: 10,
     marginTop: 4,
   },
   deliveryCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 16,
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: colors.border,
+    borderColor: '#E2E8F0',
+    padding: 12,
   },
-  deliveryCardActive: {
-    backgroundColor: colors.primaryMint,
+  deliveryCardSelected: {
     borderColor: colors.primary,
+    backgroundColor: '#F0FDF4',
   },
   deliveryIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: colors.surface,
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
-  deliveryIconBoxActive: {
+  deliveryIconBoxSelected: {
     backgroundColor: colors.primary,
   },
-  deliveryEmoji: {
-    fontSize: 18,
-  },
-  deliveryContent: {
+  deliveryTextCluster: {
     flex: 1,
   },
   deliveryTitle: {
-    fontSize: 13.5,
-    fontWeight: '800',
-    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 2,
   },
-  deliveryTitleActive: {
+  deliveryTitleSelected: {
     color: colors.primary,
   },
   deliverySubtitle: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    marginTop: 2,
+    fontSize: 11.5,
+    color: '#64748B',
+    fontWeight: '500',
   },
-  radioCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
+  radioBox: {
     marginLeft: 8,
   },
-  radioCircleActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primary,
+  statusToggleRow: {
+    flexDirection: 'row',
+    gap: 10,
   },
-  radioCheck: {
-    color: colors.textWhite,
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  hostelScroll: {
-    marginTop: 4,
-    marginBottom: 2,
-  },
-  hostelChip: {
-    backgroundColor: colors.surfaceAlt,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 14,
-    marginRight: 8,
+  statusToggleCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#E2E8F0',
+    padding: 12,
   },
-  hostelChipActive: {
-    backgroundColor: colors.primaryMint,
+  statusToggleCardActive: {
+    backgroundColor: '#F0FDF4',
     borderColor: colors.primary,
   },
-  hostelChipText: {
+  statusToggleCardBusy: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#F59E0B',
+  },
+  statusToggleText: {
     fontSize: 12,
     fontWeight: '700',
-    color: colors.textSecondary,
+    color: '#64748B',
+    flex: 1,
   },
-  hostelChipTextActive: {
+  statusToggleTextActive: {
     color: colors.primary,
   },
-  uploadCard: {
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderStyle: 'dashed',
+  statusToggleTextBusy: {
+    color: '#92400E',
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  priceInputBox: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 12,
+  },
+  priceSymbol: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.primary,
+    marginRight: 6,
+  },
+  priceTextInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  priceTypeSelector: {
+    flex: 1.6,
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    padding: 3,
+  },
+  priceTypePill: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 10,
+  },
+  priceTypePillActive: {
+    backgroundColor: colors.primary,
+  },
+  priceTypeLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  priceTypeLabelActive: {
+    color: '#FFFFFF',
+  },
+  dropdownSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  dropdownSelectorText: {
+    fontSize: 13.5,
+    color: '#1E293B',
+    fontWeight: '600',
+  },
+  dropdownListContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    marginTop: 6,
+    maxHeight: 180,
     overflow: 'hidden',
-    marginTop: 4,
+  },
+  dropdownListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  dropdownItemText: {
+    fontSize: 13,
+    color: '#334155',
+  },
+  phoneInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  countryCodeBadge: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginRight: 8,
+  },
+  countryCodeText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.primary,
+  },
+  phoneTextInput: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: '#0F172A',
+    fontWeight: '500',
+  },
+  programLevelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  descriptionLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  charCounter: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
+  },
+  textArea: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+    fontSize: 13.5,
+    color: '#0F172A',
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  uploadBox: {
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    borderStyle: 'dashed',
+    borderRadius: 14,
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FAFAFA',
   },
   uploadPlaceholder: {
     alignItems: 'center',
-    paddingVertical: 24,
-    paddingHorizontal: 16,
   },
-  uploadIcon: {
-    fontSize: 28,
-    marginBottom: 6,
+  uploadIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#ECFDF5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
   },
-  uploadPrompt: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.textPrimary,
+  uploadTitle: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#1E293B',
     marginBottom: 4,
   },
-  uploadHint: {
-    fontSize: 11,
-    color: colors.textMuted,
+  uploadSubtitle: {
+    fontSize: 11.5,
+    color: '#64748B',
+    textAlign: 'center',
   },
-  previewContainer: {
-    position: 'relative',
-    height: 160,
+  imagePreviewContainer: {
+    alignItems: 'center',
     width: '100%',
   },
-  previewImage: {
+  imagePreview: {
     width: '100%',
-    height: '100%',
+    height: 140,
+    borderRadius: 10,
+    marginBottom: 8,
   },
   removeImageBtn: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: 'rgba(15, 23, 42, 0.85)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   removeImageText: {
-    color: colors.textWhite,
-    fontSize: 11,
-    fontWeight: '800',
+    fontSize: 12,
+    color: '#DC2626',
+    fontWeight: '700',
   },
-  stickyFooter: {
-    backgroundColor: colors.surface,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 14,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-    ...shadows.cardHover,
+  helperText: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 4,
   },
   publishBtn: {
-    borderRadius: 16,
-    paddingVertical: 14,
+    backgroundColor: colors.primary,
+    borderRadius: 14,
+    paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  publishBtnActive: {
-    backgroundColor: colors.primary, // Forest Green #0D6535
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 4,
+    marginTop: 8,
+    ...shadows.card,
   },
   publishBtnDisabled: {
     backgroundColor: '#E2E8F0',
   },
   publishBtnText: {
+    color: '#FFFFFF',
     fontSize: 15,
-    fontWeight: '900',
+    fontWeight: '800',
     letterSpacing: 0.3,
-  },
-  publishBtnTextActive: {
-    color: colors.textWhite,
   },
   publishBtnTextDisabled: {
     color: '#94A3B8',

@@ -73,28 +73,4 @@ export interface StudentProfile {
 export type PriceBracket = 'all' | 'under_30' | '30_70' | '70_150' | 'above_150';
 export type SortOption = 'recommended' | 'price_asc' | 'price_desc' | 'rating_desc' | 'reviews_desc';
 
-export interface EscrowTransaction {
-  id: string;
-  hustle_id?: string;
-  hustleId?: string;
-  buyer_email?: string;
-  buyerEmail?: string;
-  seller_name?: string;
-  sellerName?: string;
-  amount: number;
-  payment_method?: string;
-  paymentMethod?: string;
-  momo_number?: string;
-  momoNumber?: string;
-  status: string;
-  reference: string;
-  created_at?: string;
-  createdAt?: string;
-  escrow_status?: 'held' | 'released' | 'refunded' | 'HELD' | 'RELEASED' | 'REFUNDED' | string;
-  escrowStatus?: 'held' | 'released' | 'refunded' | 'HELD' | 'RELEASED' | 'REFUNDED' | string;
-  meetup_spot?: string;
-  meetupSpot?: string;
-  hustleTitle?: string;
-  hustle_title?: string;
-}
 

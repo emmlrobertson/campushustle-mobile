@@ -4,21 +4,23 @@ import {
   Text,
   TextInput,
   FlatList,
-  ScrollView,
   StyleSheet,
   TouchableOpacity,
   SafeAreaView,
   StatusBar,
   RefreshControl,
-  Platform,
+  Image,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useHustleContext } from '../context/HustleContext';
 import { Header } from '../components/Header';
 import { CategoryFilter } from '../components/CategoryFilter';
 import { LocationFilter } from '../components/LocationFilter';
 import { HustleCard } from '../components/HustleCard';
-import { CAMPUS_METADATA } from '../data/mockData';
+import { Hustle } from '../types';
+import { getHustleImageUrl } from '../utils/imageHelper';
 import { colors, shadows } from '../theme/colors';
+import { isUnfilteredLocation } from '../utils/hustle';
 
 interface HomeScreenProps {
   navigation: any;
@@ -31,23 +33,22 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     setSearchQuery,
     selectedLocation,
     selectedCategory,
-    selectedCampus,
+    setSelectedLocation,
+    setSelectedCategory,
     isLoading,
     error,
     refreshHustles,
+    isFavorite,
+    toggleFavorite,
   } = useHustleContext();
 
-  const campusInfo = CAMPUS_METADATA[selectedCampus] || CAMPUS_METADATA.knust;
+  // Extract the featured hustle (first featured one or first item)
+  const featuredHustle = filteredHustles.find((h) => h.isFeatured) || filteredHustles[0];
+  const moreHustles = featuredHustle
+    ? filteredHustles.filter((h) => h.id !== featuredHustle.id)
+    : filteredHustles;
 
-  // Top Student Hustlers for the horizontal story/avatar bar (Figma)
-  const topHustlers = [
-    { id: '1', initials: 'AM', name: 'Abena', badge: 'Fast Delivery', bg: colors.badgeGreenBg, text: colors.badgeGreenText },
-    { id: '2', initials: 'KA', name: 'Kwame', badge: 'New', bg: colors.badgePurpleBg, text: colors.badgePurpleText },
-    { id: '3', initials: 'ET', name: 'Emmanuel', badge: 'Popular', bg: colors.badgeBlueBg, text: colors.badgeBlueText },
-    { id: '4', initials: 'KO', name: 'Kofi', badge: 'Top Rated', bg: colors.badgeGoldBg, text: colors.badgeGoldText },
-    { id: '5', initials: 'AS', name: 'Ama', badge: 'Beauty', bg: colors.badgePinkBg, text: colors.badgePinkText },
-    { id: '6', initials: 'DB', name: 'Daniel', badge: 'Tutoring', bg: colors.badgeGreenBg, text: colors.badgeGreenText },
-  ];
+  const isHeroFav = featuredHustle ? isFavorite(featuredHustle.id) : false;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -55,10 +56,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       <Header />
 
       <FlatList
-        data={filteredHustles}
+        data={moreHustles}
         keyExtractor={(item) => item.id}
         numColumns={2}
-        columnWrapperStyle={styles.columnWrapper}
+        columnWrapperStyle={moreHustles.length > 0 ? styles.columnWrapper : undefined}
         renderItem={({ item }) => (
           <HustleCard
             hustle={item}
@@ -77,54 +78,28 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         }
         ListHeaderComponent={
           <View style={styles.headerWrapper}>
-            {/* Top Hustler Avatar Row (Figma) */}
-            <View style={styles.avatarBarSection}>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.avatarScroll}
-              >
-                {topHustlers.map((hustler) => (
-                  <TouchableOpacity
-                    key={hustler.id}
-                    style={styles.hustlerPill}
-                    activeOpacity={0.8}
-                    onPress={() => setSearchQuery(hustler.name)}
-                  >
-                    <View style={styles.hustlerAvatar}>
-                      <Text style={styles.hustlerInitials}>{hustler.initials}</Text>
-                    </View>
-                    <View style={styles.hustlerInfo}>
-                      <Text style={styles.hustlerName}>{hustler.name}</Text>
-                      <View style={[styles.hustlerBadge, { backgroundColor: hustler.bg }]}>
-                        <Text style={[styles.hustlerBadgeText, { color: hustler.text }]}>
-                          {hustler.badge}
-                        </Text>
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-
-            {/* Search Bar matching Figma */}
+            {/* Search Bar matching screenshots */}
             <View style={styles.searchBar}>
-              <Text style={styles.searchIcon}>🔍</Text>
+              <Ionicons name="search-outline" size={19} color="#94A3B8" style={styles.searchIcon} />
               <TextInput
                 style={styles.searchInput}
                 placeholder="Search tutoring, food, repairs..."
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor="#94A3B8"
                 value={searchQuery}
                 onChangeText={setSearchQuery}
               />
               {searchQuery !== '' && (
-                <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Text style={styles.clearText}>✕</Text>
+                <TouchableOpacity
+                  onPress={() => setSearchQuery('')}
+                  style={styles.clearButton}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="close-circle" size={18} color="#94A3B8" />
                 </TouchableOpacity>
               )}
             </View>
 
-            {/* Category Filter Horizontal Pills with 'Other' custom input */}
+            {/* Category Filter Horizontal Pills with Vector Icons */}
             <CategoryFilter />
 
             {/* Hostel Dropdown Filter */}
@@ -136,48 +111,144 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 {filteredHustles.length} Services available
               </Text>
               <View style={styles.liveBadge}>
-                <Text style={styles.liveDot}>●</Text>
+                <View style={styles.liveDot} />
                 <Text style={styles.liveText}>Live</Text>
               </View>
             </View>
-          </View>
-        }
-        ListFooterComponent={
-          /* Deep Forest Green Callout Banner from Figma */
-          <View style={styles.ctaBanner}>
-            <View style={styles.ctaTextContainer}>
-              <Text style={styles.ctaTitle}>Have a skill? Start earning</Text>
-              <Text style={styles.ctaSubtitle}>
-                Post your service and connect with students
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={styles.ctaButton}
-              onPress={() => navigation.navigate('Post')}
-              activeOpacity={0.88}
-            >
-              <Text style={styles.ctaButtonText}>Post →</Text>
-            </TouchableOpacity>
+
+            {/* Prominent Featured Service Card matching screenshot */}
+            {featuredHustle && (
+              <TouchableOpacity
+                style={styles.featuredCard}
+                activeOpacity={0.92}
+                onPress={() => navigation.navigate('HustleDetail', { hustleId: featuredHustle.id })}
+              >
+                <Image
+                  source={{
+                    uri: getHustleImageUrl(
+                      featuredHustle.imageUrl,
+                      featuredHustle.category,
+                      featuredHustle.title
+                    ),
+                  }}
+                  style={styles.featuredImage}
+                  resizeMode="cover"
+                />
+                <View style={styles.featuredOverlay} />
+
+                {/* Top Badges Row */}
+                <View style={styles.featuredTopRow}>
+                  <View style={styles.featuredBadgeCluster}>
+                    <View style={styles.featuredPill}>
+                      <Text style={styles.featuredPillText}>Featured</Text>
+                    </View>
+                    <View style={styles.topRatedPill}>
+                      <Text style={styles.topRatedPillText}>Top Rated</Text>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.featuredHeartBtn}
+                    onPress={(e) => {
+                      e?.stopPropagation?.();
+                      toggleFavorite(featuredHustle.id);
+                    }}
+                    activeOpacity={0.8}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons
+                      name={isHeroFav ? 'heart' : 'heart-outline'}
+                      size={18}
+                      color={isHeroFav ? '#EF4444' : '#64748B'}
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Bottom Content Info */}
+                <View style={styles.featuredBottomInfo}>
+                  <View style={styles.featuredLocationRow}>
+                    <Ionicons name="location-sharp" size={13} color="#10B981" style={{ marginRight: 4 }} />
+                    <Text style={styles.featuredLocationText}>{featuredHustle.hostelLocation}</Text>
+                  </View>
+
+                  <Text style={styles.featuredTitle} numberOfLines={2}>
+                    {featuredHustle.title}
+                  </Text>
+
+                  <Text style={styles.featuredSeller}>
+                    {featuredHustle.sellerName} · {featuredHustle.sellerProgram}
+                  </Text>
+
+                  <View style={styles.featuredFooterRow}>
+                    <View style={styles.featuredReviewsRow}>
+                      <Ionicons name="star" size={14} color="#F59E0B" style={{ marginRight: 4 }} />
+                      <Text style={styles.featuredReviewsText}>
+                        ({featuredHustle.reviewCount || 0} reviews)
+                      </Text>
+                    </View>
+
+                    <View style={styles.featuredPriceBox}>
+                      <Text style={styles.featuredPriceAmount}>
+                        GH₵ {featuredHustle.price}
+                      </Text>
+                      <Text style={styles.featuredPriceSuffix}>
+                        {featuredHustle.priceType === 'hourly' ? 'per hour' : 'flat fee'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            )}
+
+            {/* "MORE SERVICES" Header */}
+            {moreHustles.length > 0 && (
+              <View style={styles.moreServicesHeader}>
+                <Text style={styles.moreServicesText}>MORE SERVICES</Text>
+              </View>
+            )}
           </View>
         }
         ListEmptyComponent={
-          !isLoading ? (
+          !isLoading && filteredHustles.length === 0 ? (
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyIcon}>🔍</Text>
-              <Text style={styles.emptyTitle}>No matching services found</Text>
-              <Text style={styles.emptySubtitle}>
-                Try adjusting your search query, selecting "All", or choosing a different campus hostel location.
+              <Ionicons
+                name={error ? 'cloud-offline-outline' : 'search-outline'}
+                size={40}
+                color="#94A3B8"
+                style={{ marginBottom: 12 }}
+              />
+              <Text style={styles.emptyTitle}>
+                {error ? 'Unable to load services' : 'No matching services found'}
               </Text>
-              {(searchQuery !== '' || selectedLocation !== 'All Locations' || selectedCategory !== 'all') && (
+              <Text style={styles.emptySubtitle}>
+                {error
+                  ? error
+                  : 'Try adjusting your search query, selecting "All", or choosing a different campus hostel location.'}
+              </Text>
+              {error ? (
                 <TouchableOpacity
                   style={styles.resetBtn}
-                  onPress={() => {
-                    setSearchQuery('');
-                  }}
+                  onPress={refreshHustles}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.resetBtnText}>Reset All Filters</Text>
+                  <Text style={styles.resetBtnText}>Retry</Text>
                 </TouchableOpacity>
+              ) : (
+                (searchQuery !== '' ||
+                  !isUnfilteredLocation(selectedLocation) ||
+                  selectedCategory !== 'all') && (
+                  <TouchableOpacity
+                    style={styles.resetBtn}
+                    onPress={() => {
+                      setSearchQuery('');
+                      setSelectedLocation('All Locations');
+                      setSelectedCategory('all');
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.resetBtnText}>Reset All Filters</Text>
+                  </TouchableOpacity>
+                )
               )}
             </View>
           ) : null
@@ -190,215 +261,234 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#F8FAFC',
   },
   listContent: {
     paddingBottom: 28,
   },
   headerWrapper: {
-    marginBottom: 8,
+    marginBottom: 4,
   },
-  // Top Hustler Avatar Row
-  avatarBarSection: {
-    marginVertical: 10,
-  },
-  avatarScroll: {
-    paddingHorizontal: 16,
-    gap: 10,
-  },
-  hustlerPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.card,
-  },
-  hustlerAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.primaryMint,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  hustlerInitials: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: colors.primary,
-  },
-  hustlerInfo: {
-    justifyContent: 'center',
-  },
-  hustlerName: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: colors.textPrimary,
-  },
-  hustlerBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    marginTop: 2,
-  },
-  hustlerBadgeText: {
-    fontSize: 9.5,
-    fontWeight: '800',
-  },
-  // Search Bar
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
     marginHorizontal: 16,
-    paddingHorizontal: 14,
-    paddingVertical: Platform.OS === 'ios' ? 11 : 9,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginTop: 4,
+    marginTop: 12,
     marginBottom: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   searchIcon: {
-    fontSize: 14,
     marginRight: 10,
   },
   searchInput: {
     flex: 1,
-    fontSize: 13.5,
-    color: colors.textPrimary,
-    fontWeight: '600',
+    fontSize: 14,
+    color: '#0F172A',
+    fontWeight: '500',
     padding: 0,
   },
   clearButton: {
-    padding: 4,
+    padding: 2,
   },
-  clearText: {
-    fontSize: 13,
-    color: colors.textMuted,
-    fontWeight: '700',
-  },
-  // Results bar
   resultsBar: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 18,
-    marginTop: 6,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    marginTop: 4,
     marginBottom: 12,
   },
   resultsCount: {
-    fontSize: 13.5,
+    fontSize: 16,
     fontWeight: '800',
-    color: colors.textPrimary,
+    color: '#0F172A',
   },
   liveBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.primaryMint,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
+    gap: 6,
   },
   liveDot: {
-    color: colors.primary,
-    fontSize: 8,
-    marginRight: 4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
   },
   liveText: {
-    color: colors.primary,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  featuredCard: {
+    marginHorizontal: 16,
+    height: 240,
+    borderRadius: 20,
+    overflow: 'hidden',
+    position: 'relative',
+    marginBottom: 18,
+    backgroundColor: '#0F172A',
+    ...shadows.card,
+  },
+  featuredImage: {
+    width: '100%',
+    height: '100%',
+    position: 'absolute',
+  },
+  featuredOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+  },
+  featuredTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 14,
+  },
+  featuredBadgeCluster: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  featuredPill: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 4.5,
+    borderRadius: 8,
+  },
+  featuredPillText: {
     fontSize: 11,
     fontWeight: '800',
+    color: '#0F172A',
   },
-  columnWrapper: {
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
+  topRatedPill: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 10,
+    paddingVertical: 4.5,
+    borderRadius: 8,
   },
-  // Deep Forest Green CTA Banner
-  ctaBanner: {
+  topRatedPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  featuredHeartBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  featuredBottomInfo: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 16,
+  },
+  featuredLocationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.primary, // #0D6535
-    borderRadius: 20,
-    marginHorizontal: 16,
-    marginTop: 18,
-    padding: 18,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  ctaTextContainer: {
-    flex: 1,
-    marginRight: 12,
-  },
-  ctaTitle: {
-    color: colors.textWhite,
-    fontSize: 15,
-    fontWeight: '900',
     marginBottom: 4,
-    letterSpacing: -0.3,
   },
-  ctaSubtitle: {
-    color: colors.primaryMint,
+  featuredLocationText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#10B981',
+  },
+  featuredTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    lineHeight: 22,
+    marginBottom: 4,
+  },
+  featuredSeller: {
     fontSize: 12,
     fontWeight: '600',
-    lineHeight: 16,
+    color: '#E2E8F0',
+    marginBottom: 8,
   },
-  ctaButton: {
-    backgroundColor: colors.surface,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 18,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+  featuredFooterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
   },
-  ctaButtonText: {
-    color: colors.primary,
-    fontSize: 13,
+  featuredReviewsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  featuredReviewsText: {
+    fontSize: 12,
+    color: '#E2E8F0',
+    fontWeight: '600',
+  },
+  featuredPriceBox: {
+    alignItems: 'flex-end',
+  },
+  featuredPriceAmount: {
+    fontSize: 22,
     fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+  },
+  featuredPriceSuffix: {
+    fontSize: 10.5,
+    color: '#E2E8F0',
+    fontWeight: '600',
+    marginTop: -2,
+  },
+  moreServicesHeader: {
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+  moreServicesText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.8,
+  },
+  columnWrapper: {
+    paddingHorizontal: 16,
+    justifyContent: 'space-between',
   },
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 48,
-    paddingHorizontal: 32,
-  },
-  emptyIcon: {
-    fontSize: 40,
-    marginBottom: 12,
+    padding: 32,
+    marginTop: 20,
   },
   emptyTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: colors.textPrimary,
-    marginBottom: 6,
+    color: '#0F172A',
+    marginBottom: 8,
   },
   emptySubtitle: {
     fontSize: 13,
-    color: colors.textSecondary,
+    color: '#64748B',
     textAlign: 'center',
     lineHeight: 18,
+    marginBottom: 16,
   },
   resetBtn: {
-    marginTop: 16,
     backgroundColor: colors.primary,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 14,
+    borderRadius: 12,
   },
   resetBtnText: {
-    color: colors.textWhite,
+    color: '#FFFFFF',
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '700',
   },
 });

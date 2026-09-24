@@ -1,8 +1,9 @@
 import React from 'react';
 import { Text, View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { LinkingOptions, NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 
 import { HomeScreen } from '../screens/HomeScreen';
 import { ExploreScreen } from '../screens/ExploreScreen';
@@ -16,6 +17,41 @@ const Tab = createBottomTabNavigator();
 const HomeStack = createNativeStackNavigator();
 const ExploreStack = createNativeStackNavigator();
 const FavoritesStack = createNativeStackNavigator();
+
+const linking: LinkingOptions<any> = {
+  enabled: true,
+  prefixes: [
+    'campushustle://',
+    ...(typeof window !== 'undefined' && window.location?.origin ? [window.location.origin] : []),
+  ],
+  config: {
+    screens: {
+      Home: {
+        path: '',
+        screens: {
+          HomeScreen: '',
+          HustleDetail: 'hustle/:hustleId',
+        },
+      },
+      Explore: {
+        path: 'explore',
+        screens: {
+          ExploreScreen: '',
+          HustleDetail: 'hustle/:hustleId',
+        },
+      },
+      Post: 'post',
+      Favorites: {
+        path: 'saved',
+        screens: {
+          FavoritesScreen: '',
+          HustleDetail: 'hustle/:hustleId',
+        },
+      },
+      Profile: 'profile',
+    },
+  },
+};
 
 function HomeStackScreen() {
   return (
@@ -46,25 +82,41 @@ function FavoritesStackScreen() {
 
 export function TabNavigator() {
   return (
-    <NavigationContainer>
+    <NavigationContainer
+      linking={linking}
+      documentTitle={{
+        formatter: (_options, route) => {
+          if (route?.name === 'HustleDetail') return 'Service | CampusHustle';
+          if (route?.name === 'Post') return 'Post a Service | CampusHustle';
+          if (route?.name === 'Profile') return 'Profile | CampusHustle';
+          if (route?.name === 'Favorites' || route?.name === 'FavoritesScreen') {
+            return 'Saved | CampusHustle';
+          }
+          if (route?.name === 'Explore' || route?.name === 'ExploreScreen') {
+            return 'Explore | CampusHustle';
+          }
+          return 'CampusHustle';
+        },
+      }}
+    >
       <Tab.Navigator
         screenOptions={({ route }) => ({
           headerShown: false,
-          tabBarActiveTintColor: colors.primary, // #0D6535 Forest Green from Figma
+          tabBarActiveTintColor: colors.primary,
           tabBarInactiveTintColor: '#94A3B8',
           tabBarStyle: styles.tabBar,
           tabBarLabelStyle: styles.tabLabel,
-          tabBarIcon: ({ focused }) => {
-            let iconGlyph = '🏠';
-            if (route.name === 'Home') iconGlyph = '🏠';
-            else if (route.name === 'Explore') iconGlyph = '🧭';
-            else if (route.name === 'Post') return null; // Rendered by central FAB
-            else if (route.name === 'Favorites') iconGlyph = focused ? '🔖' : '🏷️';
-            else if (route.name === 'Profile') iconGlyph = '👤';
+          tabBarIcon: ({ focused, color }) => {
+            let iconName: keyof typeof Ionicons.glyphMap = 'home-outline';
+            if (route.name === 'Home') iconName = focused ? 'home' : 'home-outline';
+            else if (route.name === 'Explore') iconName = focused ? 'compass' : 'compass-outline';
+            else if (route.name === 'Post') return null;
+            else if (route.name === 'Favorites') iconName = focused ? 'bookmark' : 'bookmark-outline';
+            else if (route.name === 'Profile') iconName = focused ? 'person' : 'person-outline';
 
             return (
               <View style={styles.iconContainer}>
-                <Text style={{ fontSize: focused ? 18 : 16 }}>{iconGlyph}</Text>
+                <Ionicons name={iconName} size={22} color={color} />
                 {focused && <View style={styles.activeBar} />}
               </View>
             );
@@ -74,20 +126,20 @@ export function TabNavigator() {
         <Tab.Screen name="Home" component={HomeStackScreen} options={{ tabBarLabel: 'Home' }} />
         <Tab.Screen name="Explore" component={ExploreStackScreen} options={{ tabBarLabel: 'Explore' }} />
 
-        {/* Central Prominent Forest Green Floating '+' Post Button (Figma) */}
+        {/* Central Prominent Green '+' Post Button matching screenshots */}
         <Tab.Screen
           name="Post"
           component={PostHustleScreen}
           options={{
             tabBarLabel: 'Post',
-            tabBarButton: (props) => (
+            tabBarButton: ({ children: _children, style: _style, ...rest }) => (
               <View style={styles.fabWrapper}>
                 <TouchableOpacity
+                  {...rest}
                   style={styles.floatingPostBtn}
-                  onPress={props.onPress}
                   activeOpacity={0.88}
                 >
-                  <Text style={styles.plusIcon}>+</Text>
+                  <Ionicons name="add" size={26} color="#FFFFFF" />
                 </TouchableOpacity>
                 <Text style={styles.fabLabel}>Post</Text>
               </View>
@@ -104,11 +156,11 @@ export function TabNavigator() {
 
 const styles = StyleSheet.create({
   tabBar: {
-    backgroundColor: colors.surface,
+    backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-    height: Platform.OS === 'ios' ? 72 : 64,
-    paddingBottom: Platform.OS === 'ios' ? 14 : 8,
+    borderTopColor: '#F1F5F9',
+    height: Platform.OS === 'ios' ? 76 : 64,
+    paddingBottom: Platform.OS === 'ios' ? 16 : 8,
     paddingTop: 8,
     elevation: 8,
     shadowColor: '#000000',
@@ -118,7 +170,7 @@ const styles = StyleSheet.create({
   },
   tabLabel: {
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: '700',
     marginTop: 2,
   },
   iconContainer: {
@@ -126,36 +178,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   activeBar: {
-    width: 14,
-    height: 3,
-    backgroundColor: colors.primary, // #0D6535
+    width: 16,
+    height: 2.5,
+    backgroundColor: colors.primary,
     borderRadius: 2,
     marginTop: 3,
   },
   fabWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
-    top: -14,
+    top: -12,
   },
   floatingPostBtn: {
     width: 48,
     height: 48,
-    borderRadius: 16, // Rounded square/pill matching Figma
-    backgroundColor: colors.primary, // #0D6535
+    borderRadius: 14,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     ...shadows.fab,
   },
-  plusIcon: {
-    color: colors.textWhite,
-    fontSize: 26,
-    fontWeight: '500',
-    marginTop: -2,
-  },
   fabLabel: {
-    fontSize: 10.5,
-    fontWeight: '800',
+    fontSize: 11,
+    fontWeight: '700',
     color: colors.primary,
-    marginTop: 2,
+    marginTop: 3,
   },
 });

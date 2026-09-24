@@ -8,6 +8,7 @@ import {
   ScrollView,
   Platform,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useHustleContext } from '../context/HustleContext';
 import { CampusId } from '../types';
 import { colors, shadows } from '../theme/colors';
@@ -29,10 +30,10 @@ export const Header: React.FC = () => {
     ucc: 'Recommended safe meeting locations at UCC: Sam Jonah Library, Science Quadrangle, and Casford Field.',
   };
 
-  const campuses: { id: CampusId; name: string; city: string; icon: string }[] = [
-    { id: 'knust', name: 'Kwame Nkrumah Univ. of Science & Tech', city: 'Kumasi', icon: '🏛️' },
-    { id: 'ug_legon', name: 'University of Ghana (Legon)', city: 'Accra', icon: '🎓' },
-    { id: 'ucc', name: 'University of Cape Coast', city: 'Cape Coast', icon: '🌊' },
+  const campuses: { id: CampusId; name: string; city: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+    { id: 'knust', name: 'Kwame Nkrumah Univ. of Science & Tech', city: 'Kumasi', icon: 'business-outline' },
+    { id: 'ug_legon', name: 'University of Ghana (Legon)', city: 'Accra', icon: 'school-outline' },
+    { id: 'ucc', name: 'University of Cape Coast', city: 'Cape Coast', icon: 'water-outline' },
   ];
 
   const handleSelectCampus = (campusId: CampusId) => {
@@ -57,7 +58,7 @@ export const Header: React.FC = () => {
             activeOpacity={0.75}
             accessibilityLabel="Notifications"
           >
-            <Text style={styles.bellIcon}>🔔</Text>
+            <Ionicons name="notifications-outline" size={19} color={colors.textPrimary} />
             <View style={styles.bellDot} />
           </TouchableOpacity>
 
@@ -67,7 +68,7 @@ export const Header: React.FC = () => {
             activeOpacity={0.85}
             accessibilityLabel="Switch Campus"
           >
-            <Text style={styles.pinIcon}>📍</Text>
+            <Ionicons name="location-sharp" size={14} color={colors.textWhite} style={styles.pinIcon} />
             <Text style={styles.campusText}>{campusBadges[selectedCampus]}</Text>
           </TouchableOpacity>
         </View>
@@ -80,7 +81,7 @@ export const Header: React.FC = () => {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Your Campus</Text>
               <TouchableOpacity onPress={() => setCampusModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                <Text style={styles.closeBtn}>✕</Text>
+                <Ionicons name="close" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -94,14 +95,22 @@ export const Header: React.FC = () => {
                     onPress={() => handleSelectCampus(c.id)}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.campusItemIcon}>{c.icon}</Text>
+                    <View style={styles.campusIconBox}>
+                      <Ionicons
+                        name={c.icon}
+                        size={20}
+                        color={isSelected ? colors.primary : colors.textSecondary}
+                      />
+                    </View>
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.campusItemName, isSelected && styles.campusItemNameActive]}>
                         {campusBadges[c.id]}
                       </Text>
                       <Text style={styles.campusItemDesc}>{c.name} · {c.city}</Text>
                     </View>
-                    {isSelected && <Text style={styles.checkIcon}>✓</Text>}
+                    {isSelected && (
+                      <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                    )}
                   </TouchableOpacity>
                 );
               })}
@@ -115,21 +124,30 @@ export const Header: React.FC = () => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>🔔 Campus Alerts & Safety</Text>
+              <View style={styles.modalTitleRow}>
+                <Ionicons name="notifications" size={18} color={colors.primary} style={{ marginRight: 6 }} />
+                <Text style={styles.modalTitle}>Campus Alerts & Safety</Text>
+              </View>
               <TouchableOpacity onPress={() => setBellModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                <Text style={styles.closeBtn}>✕</Text>
+                <Ionicons name="close" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
             <View style={styles.alertCard}>
-              <Text style={styles.alertCardTitle}>🛡️ Campus Escrow Protection Active</Text>
+              <View style={styles.alertHeaderRow}>
+                <Ionicons name="cash-outline" size={16} color={colors.primary} style={{ marginRight: 6 }} />
+                <Text style={styles.alertCardTitle}>Pay the seller directly</Text>
+              </View>
               <Text style={styles.alertCardBody}>
-                All MoMo payments are held securely in Escrow until you meet the student seller on campus and verify service delivery!
+                Chat on WhatsApp to agree the job, then pay with MoMo or cash when you meet. CampusHustle does not hold your money.
               </Text>
             </View>
 
             <View style={styles.alertCard}>
-              <Text style={styles.alertCardTitle}>📍 Safe Campus Meetup Hubs</Text>
+              <View style={styles.alertHeaderRow}>
+                <Ionicons name="location" size={16} color={colors.primary} style={{ marginRight: 6 }} />
+                <Text style={styles.alertCardTitle}>Safe Campus Meetup Hubs</Text>
+              </View>
               <Text style={styles.alertCardBody}>
                 {meetupHubs[selectedCampus]}
               </Text>
@@ -140,7 +158,7 @@ export const Header: React.FC = () => {
               onPress={() => setBellModalVisible(false)}
               activeOpacity={0.85}
             >
-              <Text style={styles.ackBtnText}>Got it!</Text>
+              <Text style={styles.ackBtnText}>Got it</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -173,7 +191,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   greenText: {
-    color: colors.primary, // Deep Forest Green (#0D6535)
+    color: colors.primary, // #059669
   },
   subtext: {
     fontSize: 11,
@@ -188,51 +206,45 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   bellBtn: {
-    backgroundColor: colors.surfaceAlt,
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    backgroundColor: '#FFFFFF',
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
     borderWidth: 1,
-    borderColor: colors.border,
-  },
-  bellIcon: {
-    fontSize: 16,
+    borderColor: '#E2E8F0',
   },
   bellDot: {
     position: 'absolute',
-    top: 8,
-    right: 9,
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: colors.danger,
-    borderWidth: 1.5,
-    borderColor: colors.surface,
+    top: 9,
+    right: 10,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.primary,
   },
   campusPill: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.primary,
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingVertical: 9,
+    borderRadius: 12,
     gap: 4,
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.2,
     shadowRadius: 4,
-    elevation: 3,
+    elevation: 2,
   },
   pinIcon: {
-    fontSize: 12,
     marginRight: 2,
   },
   campusText: {
     color: colors.textWhite,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
@@ -245,7 +257,7 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     backgroundColor: colors.surface,
-    borderRadius: 24,
+    borderRadius: 20,
     width: '100%',
     maxWidth: 400,
     padding: 20,
@@ -260,22 +272,20 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
   },
+  modalTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   modalTitle: {
     fontSize: 17,
     fontWeight: '800',
     color: colors.textPrimary,
   },
-  closeBtn: {
-    fontSize: 16,
-    color: colors.textMuted,
-    fontWeight: '700',
-    padding: 4,
-  },
   campusItem: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 14,
-    borderRadius: 16,
+    borderRadius: 14,
     marginBottom: 10,
     backgroundColor: colors.surfaceAlt,
     borderWidth: 1.5,
@@ -285,9 +295,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primaryMint,
     borderColor: colors.primary,
   },
-  campusItemIcon: {
-    fontSize: 22,
-    marginRight: 14,
+  campusIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
   campusItemName: {
     fontSize: 15,
@@ -302,12 +317,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 2,
   },
-  checkIcon: {
-    color: colors.primary,
-    fontSize: 17,
-    fontWeight: '900',
-    marginLeft: 8,
-  },
   alertCard: {
     backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
@@ -316,11 +325,15 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 12,
   },
+  alertHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
   alertCardTitle: {
     fontSize: 14,
     fontWeight: '800',
     color: colors.textPrimary,
-    marginBottom: 4,
   },
   alertCardBody: {
     fontSize: 13,
@@ -329,7 +342,7 @@ const styles = StyleSheet.create({
   },
   ackBtn: {
     backgroundColor: colors.primary,
-    borderRadius: 14,
+    borderRadius: 12,
     paddingVertical: 13,
     alignItems: 'center',
     marginTop: 6,

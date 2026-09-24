@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
-import { Hustle, Review, EscrowTransaction } from '../types';
+import { Hustle, Review } from '../types';
+import { normalizeHustle, normalizeHustles } from '../utils/hustle';
 
 const LOCAL_API_URL = 'http://localhost:5000/api';
 const CLOUD_API_URL = 'https://campushustle-backend-4.onrender.com/api';
@@ -64,7 +65,7 @@ export async function fetchHustlesFromApi(params?: {
     }
 
     const result = await response.json();
-    return result.data || [];
+    return normalizeHustles(result.data);
   } catch (error: any) {
     clearTimeout(timeoutId);
     if (error.name === 'AbortError') {
@@ -85,9 +86,22 @@ export async function fetchMyHustlesApi(token: string): Promise<Hustle[]> {
       return [];
     }
     const result = await response.json();
-    return result.data || [];
+    return normalizeHustles(result.data);
   } catch (e) {
     return [];
+  }
+}
+
+export async function fetchHustleByIdApi(id: string): Promise<Hustle | null> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/hustles/${encodeURIComponent(id)}`);
+    if (!response.ok) return null;
+    const result = await response.json();
+    const payload = result.data || result.hustle || result;
+    if (!payload || !payload.id) return null;
+    return normalizeHustle(payload);
+  } catch {
+    return null;
   }
 }
 
@@ -121,7 +135,10 @@ export async function createHustleInApi(
       throw new Error(data.error || 'Failed to create hustle listing.');
     }
 
-    return data;
+    return {
+      ...data,
+      data: data.data ? normalizeHustle(data.data) : data.data,
+    };
   } catch (err: any) {
     clearTimeout(timeoutId);
     if (err.name === 'AbortError') {
@@ -140,7 +157,8 @@ export async function uploadHustleImageApi(
   if (Platform.OS === 'web') {
     const res = await fetch(imageUri);
     const blob = await res.blob();
-    formData.append('image', blob, 'upload.jpg');
+    const file = new File([blob], 'upload.jpg', { type: blob.type || 'image/jpeg' });
+    formData.append('image', file);
   } else {
     const filename = imageUri.split('/').pop() || 'upload.jpg';
     const match = /\.(\w+)$/.exec(filename);
@@ -166,7 +184,16 @@ export async function uploadHustleImageApi(
   }
 
   const result = await response.json();
-  return result.data;
+  const payload = result.data || result;
+  const imageUrl = payload.imageUrl || payload.url || payload.secure_url || '';
+  if (!imageUrl) {
+    throw new Error('Image upload did not return a public URL.');
+  }
+  return {
+    imageUrl,
+    thumbnailUrl: payload.thumbnailUrl || payload.thumbnail_url || imageUrl,
+    publicId: payload.publicId || payload.public_id || '',
+  };
 }
 
 export async function deleteHustleInApi(id: string, token?: string): Promise<any> {
@@ -365,58 +392,6 @@ export async function logoutStudentApi(token: string): Promise<any> {
   }
 }
 
-export async function initializeMoMoPayment(
-  paymentData: {
-    hustleId: string;
-    momoNumber: string;
-    paymentMethod?: string;
-    meetupSpot?: string;
-  },
-  token: string
-): Promise<any> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-  try {
-    const response = await fetch(`${API_BASE_URL}/payments/initialize`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(paymentData),
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
-
-    const data = await response.json().catch(() => ({}));
-
-    if (!response.ok || !data.success) {
-      throw new Error(data.error || 'Failed to initialize Mobile Money payment.');
-    }
-
-    return data;
-  } catch (error: any) {
-    clearTimeout(timeoutId);
-    if (error.name === 'AbortError') {
-      throw new Error('Payment initialization timed out. Please check your network connection.');
-    }
-    throw error;
-  }
-}
-
-export async function verifyPaymentApi(reference: string): Promise<any> {
-  const response = await fetch(`${API_BASE_URL}/payments/verify/${reference}`);
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || !data.success) {
-    throw new Error(data.error || 'Payment verification failed.');
-  }
-  return data;
-}
-
-
-
 export async function fetchHustleReviewsApi(hustleId: string): Promise<Review[]> {
   try {
     const response = await fetch(`${API_BASE_URL}/hustles/${hustleId}/reviews`);
@@ -472,56 +447,6 @@ export async function toggleHustleStatusApi(
   return response.json();
 }
 
-export async function fetchPaymentHistoryApi(token: string): Promise<EscrowTransaction[]> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/payments/history`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    if (!response.ok) return [];
-    const data = await response.json();
-    return data.data || [];
-  } catch (error) {
-    return [];
-  }
-}
-
-export async function releaseEscrowPaymentApi(
-  reference: string,
-  token: string
-): Promise<any> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-  try {
-    const response = await fetch(`${API_BASE_URL}/payments/release/${reference}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
-
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok || !data.success) {
-      throw new Error(data.error || 'Failed to release escrow funds.');
-    }
-
-    return data;
-  } catch (error: any) {
-    clearTimeout(timeoutId);
-    if (error.name === 'AbortError') {
-      throw new Error('Escrow release request timed out. Please check your network connection.');
-    }
-    throw error;
-  }
-}
-
 // ============================================================================
 // FAVORITES APIS (PostgreSQL Source of Truth)
 // ============================================================================
@@ -557,203 +482,10 @@ export async function fetchFavoritesApi(
     if (!response.ok) return { favoriteIds: [], data: [] };
     const result = await response.json();
     return {
-      favoriteIds: result.favoriteIds || [],
-      data: result.data || [],
+      favoriteIds: (result.favoriteIds || []).map(String),
+      data: normalizeHustles(result.data),
     };
   } catch (error) {
     return { favoriteIds: [], data: [] };
   }
 }
-
-// ============================================================================
-// ORDERS & SUB-ORDERS APIS
-// ============================================================================
-export async function checkoutOrderApi(
-  orderPayload: {
-    items: Array<{ hustleId: string; quantity: number; meetupLocation?: string; notesToSeller?: string }>;
-    contactPhone?: string;
-    idempotencyKey?: string;
-  },
-  token: string
-): Promise<any> {
-  const response = await fetch(`${API_BASE_URL}/orders/checkout`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      ...(orderPayload.idempotencyKey ? { 'idempotency-key': orderPayload.idempotencyKey } : {}),
-    },
-    body: JSON.stringify(orderPayload),
-  });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || !data.success) {
-    throw new Error(data.error || 'Checkout failed');
-  }
-  return data;
-}
-
-export async function fetchMyOrdersApi(token: string): Promise<any[]> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/orders/my-orders`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    if (!response.ok) return [];
-    const data = await response.json();
-    return data.data || [];
-  } catch (error) {
-    return [];
-  }
-}
-
-export async function confirmSubOrderReceiptApi(subOrderId: string, token: string): Promise<any> {
-  const response = await fetch(`${API_BASE_URL}/orders/sub-orders/${subOrderId}/confirm-receipt`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || !data.success) {
-    throw new Error(data.error || 'Failed to confirm receipt of order');
-  }
-  return data;
-}
-
-// ============================================================================
-// CART APIS (PostgreSQL Multi-Seller Cart)
-// ============================================================================
-export async function fetchCartApi(token: string): Promise<any> {
-  const response = await fetch(`${API_BASE_URL}/cart`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || !data.success) {
-    throw new Error(data.error || 'Failed to load cart');
-  }
-  return data.data;
-}
-
-export async function addToCartApi(hustleId: string, quantity: number, token: string): Promise<any> {
-  const response = await fetch(`${API_BASE_URL}/cart/items`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ hustleId, quantity }),
-  });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || !data.success) {
-    throw new Error(data.error || 'Failed to add item to cart');
-  }
-  return data.data;
-}
-
-export async function updateCartItemApi(itemId: string, quantity: number, token: string): Promise<any> {
-  const response = await fetch(`${API_BASE_URL}/cart/items/${itemId}`, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ quantity }),
-  });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || !data.success) {
-    throw new Error(data.error || 'Failed to update cart quantity');
-  }
-  return data.data;
-}
-
-export async function removeFromCartApi(itemId: string, token: string): Promise<any> {
-  const response = await fetch(`${API_BASE_URL}/cart/items/${itemId}`, {
-    method: 'DELETE',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || !data.success) {
-    throw new Error(data.error || 'Failed to remove item from cart');
-  }
-  return data.data;
-}
-
-export async function clearCartApi(token: string): Promise<any> {
-  const response = await fetch(`${API_BASE_URL}/cart`, {
-    method: 'DELETE',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || !data.success) {
-    throw new Error(data.error || 'Failed to clear cart');
-  }
-  return data.data;
-}
-
-// ----------------------------------------------------------------------------
-// SELLER PAYOUT ACCOUNT API
-// ----------------------------------------------------------------------------
-
-export interface PayoutAccountData {
-  hasConfiguredPayout: boolean;
-  isPayoutVerified: boolean;
-  payoutMomoNetwork: 'MTN_MOMO' | 'TELECEL_CASH' | 'AIRTEL_TIGO_MONEY' | null;
-  maskedPhoneNumber: string | null;
-  verifiedAccountName: string | null;
-  businessName?: string | null;
-}
-
-export async function fetchPayoutAccountApi(token: string): Promise<PayoutAccountData> {
-  const response = await fetch(`${API_BASE_URL}/seller/payout-account`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || !data.success) {
-    throw new Error(data.error || 'Failed to fetch payout account settings');
-  }
-  return data.data;
-}
-
-export async function updatePayoutAccountApi(
-  payload: {
-    network: 'MTN_MOMO' | 'TELECEL_CASH' | 'AIRTEL_TIGO_MONEY';
-    phoneNumber: string;
-    accountName: string;
-  },
-  token: string
-): Promise<PayoutAccountData> {
-  const response = await fetch(`${API_BASE_URL}/seller/payout-account`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(payload),
-  });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || !data.success) {
-    throw new Error(data.error || 'Failed to update payout account');
-  }
-  return data.data;
-}
-
-

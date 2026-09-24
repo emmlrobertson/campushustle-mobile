@@ -9,21 +9,13 @@ import {
   SafeAreaView,
   Alert,
   StatusBar,
-  ActivityIndicator,
   Platform,
   RefreshControl,
-  TextInput,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useHustleContext } from '../context/HustleContext';
-import {
-  fetchPaymentHistoryApi,
-  releaseEscrowPaymentApi,
-  fetchMyHustlesApi,
-  fetchPayoutAccountApi,
-  updatePayoutAccountApi,
-  PayoutAccountData,
-} from '../services/api';
-import { EscrowTransaction, Hustle } from '../types';
+import { fetchMyHustlesApi } from '../services/api';
+import { Hustle } from '../types';
 import { CAMPUS_METADATA } from '../data/mockData';
 import { getHustleImageUrl } from '../utils/imageHelper';
 import { colors, shadows } from '../theme/colors';
@@ -78,79 +70,24 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 
   const campusInfo = CAMPUS_METADATA[selectedCampus] || CAMPUS_METADATA.knust;
 
-  const [orders, setOrders] = useState<EscrowTransaction[]>([]);
-  const [loadingOrders, setLoadingOrders] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [releasingRef, setReleasingRef] = useState<string | null>(null);
   const [remoteListings, setRemoteListings] = useState<Hustle[]>([]);
-
-  // Payout Account State
-  const [payoutAccount, setPayoutAccount] = useState<PayoutAccountData | null>(null);
-  const [isEditingPayout, setIsEditingPayout] = useState(false);
-  const [payoutNetwork, setPayoutNetwork] = useState<'MTN_MOMO' | 'TELECEL_CASH' | 'AIRTEL_TIGO_MONEY'>('MTN_MOMO');
-  const [payoutPhone, setPayoutPhone] = useState('');
-  const [payoutName, setPayoutName] = useState('');
-  const [savingPayout, setSavingPayout] = useState(false);
 
   const loadProfileData = async () => {
     if (!token) return;
     try {
-      const [listings, ordersData, payoutData] = await Promise.all([
-        fetchMyHustlesApi(token).catch(() => []),
-        fetchPaymentHistoryApi(token).catch(() => []),
-        fetchPayoutAccountApi(token).catch(() => null),
-      ]);
+      const listings = await fetchMyHustlesApi(token);
       if (listings && Array.isArray(listings)) {
         setRemoteListings(listings);
-      }
-      if (ordersData && Array.isArray(ordersData)) {
-        setOrders(ordersData);
-      }
-      if (payoutData) {
-        setPayoutAccount(payoutData);
       }
     } catch (e) {
       console.warn('Failed to refresh profile data:', e);
     }
   };
 
-  const handleSavePayout = async () => {
-    if (!token) return;
-    if (!payoutPhone.trim()) {
-      showAlert('Missing Number', 'Please enter your Mobile Money phone number.');
-      return;
-    }
-    if (!payoutName.trim()) {
-      showAlert('Missing Name', 'Please enter the registered account holder name.');
-      return;
-    }
-    setSavingPayout(true);
-    try {
-      const updated = await updatePayoutAccountApi(
-        {
-          network: payoutNetwork,
-          phoneNumber: payoutPhone.trim(),
-          accountName: payoutName.trim(),
-        },
-        token
-      );
-      setPayoutAccount(updated);
-      setIsEditingPayout(false);
-      showAlert(
-        '🎉 Payout Destination Verified',
-        'Your Ghanaian Mobile Money payout destination has been verified server-side for marketplace proceeds.'
-      );
-    } catch (err: any) {
-      showAlert('Payout Error', err.message || 'Could not verify Mobile Money account.');
-    } finally {
-      setSavingPayout(false);
-    }
-  };
-
   useEffect(() => {
     if (!token) return;
-    setLoadingOrders(true);
-    loadProfileData().finally(() => setLoadingOrders(false));
+    loadProfileData();
   }, [token]);
 
   const onRefresh = async () => {
@@ -166,50 +103,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
     local.forEach((h) => merged.set(h.id, h));
     return Array.from(merged.values());
   }, [hustles, remoteListings, user]);
-
-  const executeRelease = async (order: EscrowTransaction) => {
-    if (!token) return;
-    const seller = order.seller_name || order.sellerName || 'Seller';
-    setReleasingRef(order.reference);
-    try {
-      await releaseEscrowPaymentApi(order.reference, token);
-      setOrders((prev) =>
-        prev.map((o) =>
-          o.reference === order.reference
-            ? { ...o, escrow_status: 'released', escrowStatus: 'released' }
-            : o
-        )
-      );
-      showAlert('🎉 Escrow Released', `GH₵ ${order.amount} has been paid out to ${seller}!`);
-    } catch (err: any) {
-      showAlert('Error', err.message || 'Could not release escrow.');
-    } finally {
-      setReleasingRef(null);
-    }
-  };
-
-  const handleReleaseEscrow = (order: EscrowTransaction) => {
-    const seller = order.seller_name || order.sellerName || 'Seller';
-    const confirmMsg = `Are you sure you want to release GH₵ ${order.amount} to ${seller}? Only release once you are satisfied with the delivered hustle.`;
-    if (Platform.OS === 'web') {
-      const confirmed = window.confirm(confirmMsg);
-      if (confirmed) {
-        executeRelease(order);
-      }
-    } else {
-      Alert.alert(
-        'Confirm Service Received',
-        confirmMsg,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Release Escrow',
-            onPress: () => executeRelease(order),
-          },
-        ]
-      );
-    }
-  };
 
   const handleDelete = (id: string, title: string) => {
     const msg = `Are you sure you want to delete "${title}"?`;
@@ -263,7 +156,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
         <View style={styles.loggedOutContainer}>
           <View style={styles.loggedOutIconBox}>
-            <Text style={styles.loggedOutIcon}>👤</Text>
+            <Ionicons name="person-outline" size={36} color={colors.primary} />
           </View>
           <Text style={styles.loggedOutTitle}>{campusInfo.shortName} Student Profile</Text>
           <Text style={styles.loggedOutSub}>
@@ -275,7 +168,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
             onPress={() => setAuthModalVisible(true)}
             activeOpacity={0.85}
           >
-            <Text style={styles.loginNowText}>🔑 Log In / Register Account</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              <Ionicons name="log-in-outline" size={18} color="#FFFFFF" />
+              <Text style={styles.loginNowText}>Log In / Register Account</Text>
+            </View>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -318,8 +214,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
               <Text style={styles.userEmail}>{user.email}</Text>
               <Text style={styles.userProgram}>{user.program}</Text>
               <View style={styles.locationBadge}>
+                <Ionicons name="location-outline" size={13} color="#475569" style={{ marginRight: 4 }} />
                 <Text style={styles.locationText}>
-                  📍 {user.campus ? CAMPUS_METADATA[user.campus as keyof typeof CAMPUS_METADATA]?.shortName || campusInfo.shortName : campusInfo.shortName} • {user.hostelLocation}
+                  {user.campus ? CAMPUS_METADATA[user.campus as keyof typeof CAMPUS_METADATA]?.shortName || campusInfo.shortName : campusInfo.shortName} • {user.hostelLocation}
                 </Text>
               </View>
             </View>
@@ -338,9 +235,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 
             {/* Expansion Roadmap Callout */}
             <View style={styles.roadmapCard}>
-              <Text style={styles.roadmapTitle}>🚀 Campus Network</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <Ionicons name="globe-outline" size={16} color={colors.primary} />
+                <Text style={styles.roadmapTitle}>Campus Network</Text>
+              </View>
               <Text style={styles.roadmapText}>
-                Live across <Text style={{ fontWeight: '800' }}>KNUST (Kumasi)</Text>, <Text style={{ fontWeight: '800' }}>UG Legon (Accra)</Text>, and <Text style={{ fontWeight: '800' }}>UCC (Cape Coast)</Text> with verified student isolation!
+                Live across <Text style={{ fontWeight: '800' }}>KNUST (Kumasi)</Text>, <Text style={{ fontWeight: '800' }}>UG Legon (Accra)</Text>, and <Text style={{ fontWeight: '800' }}>UCC (Cape Coast)</Text> with verified student isolation.
               </Text>
             </View>
 
@@ -348,7 +248,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
             <View style={styles.payoutCard}>
               <View style={styles.payoutHeaderRow}>
                 <View style={{ flex: 1, paddingRight: 8 }}>
-                  <Text style={styles.payoutSectionTitle}>💳 Mobile Money Payout Account</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons name="card-outline" size={16} color={colors.primary} />
+                    <Text style={styles.payoutSectionTitle}>Mobile Money Payout Account</Text>
+                  </View>
                   <Text style={styles.payoutSectionSubtitle}>
                     Verified Ghanaian MoMo destination where proceeds are settled
                   </Text>
@@ -365,7 +268,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                       payoutAccount?.isPayoutVerified ? styles.payoutBadgeTextVerified : styles.payoutBadgeTextPending,
                     ]}
                   >
-                    {payoutAccount?.isPayoutVerified ? '✅ VERIFIED' : '⚠️ SETUP REQUIRED'}
+                    {payoutAccount?.isPayoutVerified ? 'VERIFIED' : 'SETUP REQUIRED'}
                   </Text>
                 </View>
               </View>
@@ -376,10 +279,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                     <Text style={styles.payoutInfoLabel}>Network:</Text>
                     <Text style={styles.payoutInfoValue}>
                       {payoutAccount?.payoutMomoNetwork === 'TELECEL_CASH'
-                        ? '🔴 Telecel Cash'
+                        ? 'Telecel Cash'
                         : payoutAccount?.payoutMomoNetwork === 'AIRTEL_TIGO_MONEY'
-                        ? '🔵 AirtelTigo Money'
-                        : '🟡 MTN Mobile Money'}
+                        ? 'AirtelTigo Money'
+                        : 'MTN Mobile Money'}
                     </Text>
                   </View>
                   <View style={styles.payoutInfoRow}>
@@ -407,8 +310,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                   >
                     <Text style={styles.configurePayoutBtnText}>
                       {payoutAccount?.hasConfiguredPayout
-                        ? '⚙️ Update Payout Destination'
-                        : '➕ Configure Payout Destination'}
+                        ? 'Update Payout Destination'
+                        : 'Configure Payout Destination'}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -495,14 +398,14 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
         }
         renderItem={({ item }) => {
           const itemStatus = item.status || 'OPEN';
-          const deliveryIcon =
+          const deliveryIcon: keyof typeof Ionicons.glyphMap =
             item.deliveryMode === 'campus_spot'
-              ? '🎓'
+              ? 'school-outline'
               : item.deliveryMode === 'at_seller'
-              ? '📍'
+              ? 'location-outline'
               : item.deliveryMode === 'remote'
-              ? '💻'
-              : '🏠';
+              ? 'laptop-outline'
+              : 'home-outline';
 
           return (
             <TouchableOpacity
@@ -531,14 +434,17 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                       {itemStatus === 'OPEN' ? 'AVAILABLE' : 'BUSY'}
                     </Text>
                   </View>
-                  <Text style={styles.deliveryModeMini}>{deliveryIcon}</Text>
+                  <Ionicons name={deliveryIcon} size={14} color="#64748B" style={{ marginLeft: 6 }} />
                 </View>
 
                 <Text style={styles.myHustleTitle} numberOfLines={1}>
                   {item.title}
                 </Text>
                 <Text style={styles.myHustlePrice}>GH₵ {item.price}</Text>
-                <Text style={styles.myHustleHostel}>📍 {item.hostelLocation}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                  <Ionicons name="location-outline" size={11} color="#94A3B8" style={{ marginRight: 3 }} />
+                  <Text style={styles.myHustleHostel}>{item.hostelLocation}</Text>
+                </View>
               </View>
 
               <TouchableOpacity
@@ -546,7 +452,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                 onPress={() => handleDelete(item.id, item.title)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Text style={styles.deleteBtnText}>🗑️</Text>
+                <Ionicons name="trash-outline" size={18} color="#EF4444" />
               </TouchableOpacity>
             </TouchableOpacity>
           );
@@ -559,7 +465,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
               onPress={() => navigation.navigate('Post')}
               activeOpacity={0.85}
             >
-              <Text style={styles.postNowText}>➕ Post Your First Hustle</Text>
+              <Text style={styles.postNowText}>Post Your First Hustle</Text>
             </TouchableOpacity>
           </View>
         }
@@ -567,7 +473,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
           <View style={styles.ordersSection}>
             <View style={styles.ordersHeaderRow}>
               <View>
-                <Text style={styles.sectionTitle}>🛡️ My Escrow & Payment Orders</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name="shield-checkmark-outline" size={17} color={colors.primary} />
+                  <Text style={styles.sectionTitle}>My Orders & Escrow Settlements</Text>
+                </View>
                 <Text style={styles.ordersSub}>
                   Funds held safely until verified campus meetup & delivery
                 </Text>
@@ -611,7 +520,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                             isHeld ? styles.escrowBadgeTextHeld : styles.escrowBadgeTextReleased,
                           ]}
                         >
-                          {isHeld ? '🛡️ HELD IN ESCROW' : '✅ RELEASED'}
+                          {isHeld ? 'HELD IN ESCROW' : 'RELEASED'}
                         </Text>
                       </View>
                     </View>
@@ -639,9 +548,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                         {isReleasing ? (
                           <ActivityIndicator size="small" color="#FFFFFF" />
                         ) : (
-                          <Text style={styles.releaseBtnText}>
-                            ✅ Confirm Received (Release GH₵ {order.amount})
-                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                            <Ionicons name="checkmark-circle-outline" size={17} color="#FFFFFF" />
+                            <Text style={styles.releaseBtnText}>
+                              Confirm Received (Release GH₵ {order.amount})
+                            </Text>
+                          </View>
                         )}
                       </TouchableOpacity>
                     )}

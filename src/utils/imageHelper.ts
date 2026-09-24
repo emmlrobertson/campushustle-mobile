@@ -3,6 +3,30 @@
  * category-matched fallbacks for broken, relative, or missing URLs.
  */
 
+import { API_BASE_URL } from '../services/api';
+
+function apiOrigin(): string {
+  return API_BASE_URL.replace(/\/api\/?$/, '');
+}
+
+function resolveMediaUrl(url?: string | null): string | null {
+  if (!url) return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  if (
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('data:') ||
+    trimmed.startsWith('blob:') ||
+    trimmed.startsWith('file:')
+  ) {
+    return trimmed;
+  }
+  const origin = apiOrigin();
+  if (trimmed.startsWith('/')) return `${origin}${trimmed}`;
+  return `${origin}/${trimmed}`;
+}
+
 export const DEFAULT_HUSTLE_IMAGE =
   'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=800&q=80';
 
@@ -48,9 +72,14 @@ export function getHustleImageUrl(
   category?: string,
   title?: string
 ): string {
-  // If it's a valid remote URL and NOT an ephemeral /uploads path
-  if (url && (url.startsWith('http://') || url.startsWith('https://')) && !url.includes('/uploads/')) {
-    return url;
+  const resolved = resolveMediaUrl(url);
+  if (resolved) {
+    const isBrokenLocalUpload =
+      resolved.includes('/uploads/') &&
+      (resolved.includes('localhost') || resolved.includes('127.0.0.1'));
+    if (!isBrokenLocalUpload) {
+      return resolved;
+    }
   }
 
   // Check title keywords for the most accurate thematic match

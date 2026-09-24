@@ -11,6 +11,7 @@ import {
   StatusBar,
   Platform,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useHustleContext } from '../context/HustleContext';
 import { Header } from '../components/Header';
 import { CategoryFilter } from '../components/CategoryFilter';
@@ -19,6 +20,7 @@ import { HustleCard } from '../components/HustleCard';
 import { Hustle } from '../types';
 import { getHustleImageUrl } from '../utils/imageHelper';
 import { colors, shadows } from '../theme/colors';
+import { formatRating } from '../utils/hustle';
 
 interface ExploreScreenProps {
   navigation: any;
@@ -31,6 +33,9 @@ export const ExploreScreen: React.FC<ExploreScreenProps> = ({ navigation }) => {
     setSearchQuery,
     isFavorite,
     toggleFavorite,
+    error,
+    isLoading,
+    refreshHustles,
   } = useHustleContext();
 
   // Find a prominent featured hustle for the hero card banner (Figma)
@@ -55,7 +60,7 @@ export const ExploreScreen: React.FC<ExploreScreenProps> = ({ navigation }) => {
         data={gridHustles}
         keyExtractor={(item) => item.id}
         numColumns={2}
-        columnWrapperStyle={styles.columnWrapper}
+        columnWrapperStyle={gridHustles.length > 0 ? styles.columnWrapper : undefined}
         renderItem={({ item }) => (
           <HustleCard
             hustle={item}
@@ -66,9 +71,9 @@ export const ExploreScreen: React.FC<ExploreScreenProps> = ({ navigation }) => {
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
           <View style={styles.headerWrapper}>
-            {/* Search Input matching Figma */}
+            {/* Search Input */}
             <View style={styles.searchBar}>
-              <Text style={styles.searchIcon}>🔍</Text>
+              <Ionicons name="search-outline" size={18} color="#94A3B8" style={{ marginRight: 8 }} />
               <TextInput
                 style={styles.searchInput}
                 placeholder="Search tutoring, food, repairs..."
@@ -78,7 +83,7 @@ export const ExploreScreen: React.FC<ExploreScreenProps> = ({ navigation }) => {
               />
               {searchQuery !== '' && (
                 <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Text style={styles.clearBtnText}>✕</Text>
+                  <Ionicons name="close-circle" size={17} color="#94A3B8" />
                 </TouchableOpacity>
               )}
             </View>
@@ -89,18 +94,18 @@ export const ExploreScreen: React.FC<ExploreScreenProps> = ({ navigation }) => {
             {/* Hostel Dropdown Filter */}
             <LocationFilter />
 
-            {/* Live Counter Row from Figma */}
+            {/* Live Counter Row */}
             <View style={styles.counterRow}>
               <Text style={styles.counterText}>
                 {filteredHustles.length} Services available
               </Text>
               <View style={styles.liveBadge}>
-                <Text style={styles.liveDot}>●</Text>
+                <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: colors.primary, marginRight: 5 }} />
                 <Text style={styles.liveText}>Live</Text>
               </View>
             </View>
 
-            {/* Featured Hero Banner Card matching Figma */}
+            {/* Featured Hero Banner Card */}
             {heroHustle && (
               <TouchableOpacity
                 style={styles.heroCard}
@@ -127,18 +132,26 @@ export const ExploreScreen: React.FC<ExploreScreenProps> = ({ navigation }) => {
 
                   <TouchableOpacity
                     style={styles.heroFavoriteBtn}
-                    onPress={() => toggleFavorite(heroHustle.id)}
+                    onPress={(e) => {
+                      e?.stopPropagation?.();
+                      toggleFavorite(heroHustle.id);
+                    }}
                     activeOpacity={0.8}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
-                    <Text style={styles.heroFavoriteIcon}>{isHeroFavorite ? '❤️' : '🤍'}</Text>
+                    <Ionicons
+                      name={isHeroFavorite ? 'heart' : 'heart-outline'}
+                      size={18}
+                      color={isHeroFavorite ? '#EF4444' : '#64748B'}
+                    />
                   </TouchableOpacity>
                 </View>
 
                 {/* Hero Details Bottom Section */}
                 <View style={styles.heroBottomContent}>
                   <View style={styles.locationPill}>
-                    <Text style={styles.locationPillText}>📍 {heroHustle.hostelLocation}</Text>
+                    <Ionicons name="location-sharp" size={12} color="#10B981" style={{ marginRight: 4 }} />
+                    <Text style={styles.locationPillText}>{heroHustle.hostelLocation}</Text>
                   </View>
 
                   <Text style={styles.heroTitle} numberOfLines={2}>
@@ -151,9 +164,9 @@ export const ExploreScreen: React.FC<ExploreScreenProps> = ({ navigation }) => {
 
                   <View style={styles.heroFooterRow}>
                     <View style={styles.heroRatingRow}>
-                      <Text style={styles.heroStar}>★</Text>
+                      <Ionicons name="star" size={13} color="#F59E0B" style={{ marginRight: 3 }} />
                       <Text style={styles.heroRatingText}>
-                        {heroHustle.rating.toFixed(1)} ({heroHustle.reviewCount} reviews)
+                        {formatRating(heroHustle.rating)} ({heroHustle.reviewCount || 0} reviews)
                       </Text>
                     </View>
 
@@ -174,13 +187,31 @@ export const ExploreScreen: React.FC<ExploreScreenProps> = ({ navigation }) => {
           </View>
         }
         ListEmptyComponent={
+          filteredHustles.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>🔍</Text>
-            <Text style={styles.emptyTitle}>No services found</Text>
+            <Ionicons
+              name={error ? 'cloud-offline-outline' : 'search-outline'}
+              size={36}
+              color="#94A3B8"
+              style={{ marginBottom: 10 }}
+            />
+            <Text style={styles.emptyTitle}>{error ? 'Unable to load services' : 'No services found'}</Text>
             <Text style={styles.emptySubtitle}>
-              Try searching with another keyword or picking a different hostel area.
+              {error
+                ? error
+                : 'Try searching with another keyword or picking a different hostel area.'}
             </Text>
+            {error ? (
+              <TouchableOpacity
+                style={styles.retryBtn}
+                onPress={refreshHustles}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.retryBtnText}>Retry</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
+        ) : null
         }
       />
     </SafeAreaView>
@@ -422,5 +453,17 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.textSecondary,
     textAlign: 'center',
+  },
+  retryBtn: {
+    marginTop: 16,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  retryBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
   },
 });
