@@ -11,11 +11,20 @@ import {
   StatusBar,
   Platform,
   RefreshControl,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useHustleContext } from '../context/HustleContext';
-import { fetchMyHustlesApi } from '../services/api';
-import { Hustle } from '../types';
+import {
+  fetchMyHustlesApi,
+  fetchPaymentHistoryApi,
+  releaseEscrowPaymentApi,
+  fetchPayoutAccountApi,
+  updatePayoutAccountApi,
+  PayoutAccountData,
+} from '../services/api';
+import { Hustle, EscrowTransaction } from '../types';
 import { CAMPUS_METADATA } from '../data/mockData';
 import { getHustleImageUrl } from '../utils/imageHelper';
 import { colors, shadows } from '../theme/colors';
@@ -70,30 +79,126 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 
   const campusInfo = CAMPUS_METADATA[selectedCampus] || CAMPUS_METADATA.knust;
 
+  const [orders, setOrders] = useState<EscrowTransaction[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [releasingRef, setReleasingRef] = useState<string | null>(null);
   const [remoteListings, setRemoteListings] = useState<Hustle[]>([]);
+
+  // Payout Account State
+  const [payoutAccount, setPayoutAccount] = useState<PayoutAccountData | null>(null);
+  const [isEditingPayout, setIsEditingPayout] = useState(false);
+  const [payoutNetwork, setPayoutNetwork] = useState<'MTN_MOMO' | 'TELECEL_CASH' | 'AIRTEL_TIGO_MONEY'>('MTN_MOMO');
+  const [payoutPhone, setPayoutPhone] = useState('');
+  const [payoutName, setPayoutName] = useState('');
+  const [savingPayout, setSavingPayout] = useState(false);
 
   const loadProfileData = async () => {
     if (!token) return;
     try {
-      const listings = await fetchMyHustlesApi(token);
+      const [listings, ordersData, payoutData] = await Promise.all([
+        fetchMyHustlesApi(token).catch(() => []),
+        fetchPaymentHistoryApi(token).catch(() => []),
+        fetchPayoutAccountApi(token).catch(() => null),
+      ]);
       if (listings && Array.isArray(listings)) {
         setRemoteListings(listings);
+      }
+      if (ordersData && Array.isArray(ordersData)) {
+        setOrders(ordersData);
+      }
+      if (payoutData) {
+        setPayoutAccount(payoutData);
       }
     } catch (e) {
       console.warn('Failed to refresh profile data:', e);
     }
   };
 
+  const handleSavePayout = async () => {
+    if (!token) return;
+    if (!payoutPhone.trim()) {
+      showAlert('Missing Number', 'Please enter your Mobile Money phone number.');
+      return;
+    }
+    if (!payoutName.trim()) {
+      showAlert('Missing Name', 'Please enter the registered account holder name.');
+      return;
+    }
+    setSavingPayout(true);
+    try {
+      const updated = await updatePayoutAccountApi(
+        {
+          network: payoutNetwork,
+          phoneNumber: payoutPhone.trim(),
+          accountName: payoutName.trim(),
+        },
+        token
+      );
+      setPayoutAccount(updated);
+      setIsEditingPayout(false);
+      showAlert(
+        '🎉 Payout Destination Verified',
+        'Your Ghanaian Mobile Money payout destination has been verified server-side for marketplace proceeds.'
+      );
+    } catch (err: any) {
+      showAlert('Payout Error', err.message || 'Could not verify Mobile Money account.');
+    } finally {
+      setSavingPayout(false);
+    }
+  };
+
   useEffect(() => {
     if (!token) return;
-    loadProfileData();
+    setLoadingOrders(true);
+    loadProfileData().finally(() => setLoadingOrders(false));
   }, [token]);
 
   const onRefresh = async () => {
     setRefreshing(true);
     await loadProfileData();
     setRefreshing(false);
+  };
+
+  const executeRelease = async (order: EscrowTransaction) => {
+    if (!token) return;
+    const seller = order.seller_name || order.sellerName || 'Seller';
+    setReleasingRef(order.reference);
+    try {
+      await releaseEscrowPaymentApi(order.reference, token);
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.reference === order.reference
+            ? { ...o, escrow_status: 'released', escrowStatus: 'released' }
+            : o
+        )
+      );
+      showAlert('🎉 Escrow Released', `GH₵ ${order.amount} has been paid out to ${seller}!`);
+    } catch (err: any) {
+      showAlert('Error', err.message || 'Could not release escrow.');
+    } finally {
+      setReleasingRef(null);
+    }
+  };
+
+  const handleReleaseEscrow = (order: EscrowTransaction) => {
+    const seller = order.seller_name || order.sellerName || 'Seller';
+    const confirmMsg = `Are you sure you want to release GH₵ ${order.amount} to ${seller}? Only release once you are satisfied with the delivered hustle.`;
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(confirmMsg);
+      if (confirmed) {
+        executeRelease(order);
+      }
+    } else {
+      Alert.alert('Confirm Order Delivery', confirmMsg, [
+        { text: 'Not Yet', style: 'cancel' },
+        {
+          text: 'Release Funds',
+          style: 'default',
+          onPress: () => executeRelease(order),
+        },
+      ]);
+    }
   };
 
   const myHustles = useMemo(() => {

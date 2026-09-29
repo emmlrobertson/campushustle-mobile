@@ -478,7 +478,7 @@ export const HustleDetailScreen: React.FC<HustleDetailScreenProps> = ({ route, n
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
                   <Ionicons name="star" size={13} color="#F59E0B" style={{ marginRight: 4 }} />
                   <Text style={styles.reviewsSub}>
-                    {hustle.rating.toFixed(1)} avg from {reviews.length} {reviews.length === 1 ? 'review' : 'reviews'}
+                    {Number(hustle.rating || 0).toFixed(1)} avg from {reviews.length} {reviews.length === 1 ? 'review' : 'reviews'}
                   </Text>
                 </View>
               </View>
@@ -1156,75 +1156,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 4,
     marginBottom: 16,
-  },
-  escrowHeaderBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    padding: 10,
-    borderRadius: 12,
-    marginBottom: 12,
-    gap: 8,
-  },
-  escrowBadgeIcon: {
-    fontSize: 22,
-  },
-  escrowBadgeTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#065F46',
-  },
-  escrowBadgeSub: {
-    fontSize: 11,
-    color: '#047857',
-    marginTop: 1,
-  },
-  meetupScroll: {
-    gap: 8,
-    paddingVertical: 4,
-  },
-  meetupChip: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  meetupChipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  meetupChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#334155',
-  },
-  meetupChipTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  safetyChecklistBox: {
-    backgroundColor: '#FEF3C7',
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 12,
-  },
-  safetyChecklistTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#92400E',
-    marginBottom: 4,
-    textTransform: 'uppercase',
-  },
-  safetyChecklistItem: {
-    fontSize: 11,
-    color: '#78350F',
-    lineHeight: 16,
   },
   modalInputGroup: {
     marginBottom: 12,
